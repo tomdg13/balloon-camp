@@ -28,6 +28,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _submitting = false;
   bool _paid = false;
   String? _bankQrUrl;
+  String? _logoUrl;
 
   @override
   void initState() {
@@ -62,11 +63,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
           details.add(d);
         } catch (_) {}
       }
-
-      // Load bank QR
+      // Load bank QR + logo
       try {
         final settings = await ApiService().getSettings();
         if (mounted) setState(() => _bankQrUrl = settings['bank_qr_url']);
+        if (mounted) setState(() => _logoUrl = settings['logo_url']);
       } catch (_) {}
 
       double total = 0;
@@ -572,7 +573,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 </style>
 </head>
 <body>
-<h2>🎈 Balloon Camp</h2>
+${_logoUrl != null ? "<img src=\"$_logoUrl\" style=\"width:80px;height:80px;object-fit:contain;display:block;margin:0 auto 8px;\">" : ""}\n<h2>🎈 Balloon Camp</h2>
 <div class="sub">ໂຕະ ${widget.tableNumber} · $dateStr</div>
 <div class="divider"></div>
 <table>
@@ -586,6 +587,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   </tr>
 </table>
 <div class="divider"></div>
+${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src=\"$_bankQrUrl\" style=\"width:140px;height:140px;object-fit:contain;\"><div style=\"font-size:11px;color:#666;margin-top:4px;\">ສະແກນເພື່ອຊຳລະ</div></div>" : ""}
 <div class="footer">ຂອບໃຈທີ່ໃຊ້ບໍລິການ 🙏</div>
 <br>
 <button onclick="window.print()" style="width:100%;padding:10px;background:#e94560;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">🖨️ ພິມ</button>

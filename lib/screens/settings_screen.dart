@@ -15,6 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Map<String, dynamic> _settings = {};
   bool _loading = true;
   bool _uploading = false;
+  bool _uploadingLogo = false;
 
   @override
   void initState() {
@@ -51,6 +52,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: Color(0xFF4CAF50)));
     } catch (e) {
       setState(() => _uploading = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
+              backgroundColor: const Color(0xFFE94560)));
+    }
+  }
+
+  Future<void> _uploadLogo() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (picked == null) return;
+    setState(() => _uploadingLogo = true);
+    try {
+      String url;
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        url = await ApiService().uploadLogoBytes(bytes, picked.name);
+      } else {
+        url = await ApiService().uploadLogo(File(picked.path));
+      }
+      setState(() { _settings['logo_url'] = url; _uploadingLogo = false; });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ອັບໂຫລດໂລໂກ້ສຳເລັດ'),
+              backgroundColor: Color(0xFF4CAF50)));
+    } catch (e) {
+      setState(() => _uploadingLogo = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
               backgroundColor: const Color(0xFFE94560)));
@@ -170,6 +196,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       const SizedBox(height: 8),
                                       Text(
                                         'ອັບເດດລ່າສຸດ: ${_settings['bank_qr_updated'].toString().substring(0, 10)}',
+                                        style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16213E),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(children: [
+                              Icon(Icons.storefront, color: Color(0xFFE94560), size: 20),
+                              SizedBox(width: 8),
+                              Text('ໂລໂກ້ຮ້ານ',
+                                  style: TextStyle(color: Colors.white,
+                                      fontSize: 16, fontWeight: FontWeight.bold)),
+                            ]),
+                            const SizedBox(height: 6),
+                            const Text('ຮູບນີ້ຈະສະແດງໃນໜ້າລ໋ອກອິນ ແລະ ໃບບິນ',
+                                style: TextStyle(color: Colors.white54, fontSize: 13)),
+                            const SizedBox(height: 16),
+                            Row(children: [
+                              Container(
+                                width: 160, height: 160,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F3460),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.white12),
+                                ),
+                                child: _settings['logo_url'] != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(11),
+                                        child: CachedNetworkImage(
+                                          imageUrl: _settings['logo_url'],
+                                          fit: BoxFit.contain,
+                                          placeholder: (_, __) => const Center(
+                                              child: CircularProgressIndicator(
+                                                  color: Color(0xFFE94560), strokeWidth: 2)),
+                                          errorWidget: (_, __, ___) => const Center(
+                                              child: Icon(Icons.broken_image,
+                                                  color: Colors.white24, size: 40)),
+                                        ),
+                                      )
+                                    : const Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.storefront, color: Colors.white24, size: 48),
+                                            SizedBox(height: 8),
+                                            Text('ຍັງບໍ່ມີໂລໂກ້',
+                                                style: TextStyle(color: Colors.white38, fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('ອັບໂຫລດໂລໂກ້ຮ້ານຂອງທ່ານ',
+                                        style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFE94560),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10)),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                        onPressed: _uploadingLogo ? null : _uploadLogo,
+                                        icon: _uploadingLogo
+                                            ? const SizedBox(width: 18, height: 18,
+                                                child: CircularProgressIndicator(
+                                                    color: Colors.white, strokeWidth: 2))
+                                            : const Icon(Icons.upload, color: Colors.white),
+                                        label: Text(
+                                          _uploadingLogo ? 'ກຳລັງອັບໂຫລດ...' : 'ເລືອກຮູບໂລໂກ້',
+                                          style: const TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                    if (_settings['logo_updated'] != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'ອັບເດດລ່າສຸດ: ${_settings['logo_updated'].toString().substring(0, 10)}',
                                         style: const TextStyle(color: Colors.white38, fontSize: 11),
                                       ),
                                     ],

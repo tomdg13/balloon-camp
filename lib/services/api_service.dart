@@ -206,4 +206,18 @@ class ApiService {
     final res = await _dio.post('/api/staff/settings/bank-qr', data: form);
     return res.data['bank_qr_url'];
   }
+
+  Future<String> uploadLogo(File imageFile) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(imageFile.path, filename: 'logo.png'),
+    });
+    final res = await _dio.post('/api/staff/settings/logo', data: form);
+    return res.data['logo_url'];
+  }
+
+  Future<String> uploadLogoBytes(Uint8List bytes, String filename) async {
+    final form = FormData.fromMap({'image': MultipartFile.fromBytes(bytes, filename: filename)});
+    final res = await _dio.post('/api/staff/settings/logo', data: form);
+    return res.data['logo_url'];
+  }
 }
