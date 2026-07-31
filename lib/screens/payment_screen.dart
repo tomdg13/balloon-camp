@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/print_helper.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -103,8 +104,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
       // Generate bills for all orders and verify
       for (final order in _orders) {
         final orderId = order['id'] as int;
-        // Generate bill
-        final bill = await ApiService().generateBill(orderId);
+        // Generate bill (fallback to existing bill if one already exists for this order)
+        Bill bill;
+        try {
+          bill = await ApiService().generateBill(orderId);
+        } on DioException catch (e) {
+          if (e.response?.statusCode == 409) {
+            final existingId = await ApiService().getBillIdByOrder(orderId);
+            if (existingId == null) rethrow;
+            bill = await ApiService().getBill(existingId);
+          } else {
+            rethrow;
+          }
+        }
         // If slip uploaded, upload it
         if (_slipFile != null) {
           if (kIsWeb) {
@@ -116,7 +128,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
         await ApiService().verifyPayment(bill.id, 'approved',
             note: _payMethod == 'cash'
                 ? 'ເງິນສົດ · ຈ່າຍ ${_cashCtrl.text} · ທອນ ${_change.toStringAsFixed(0)}'
-                : _payMethod);
+                : _payMethod,
+            paymentMethod: _payMethod);
       }
       setState(() { _submitting = false; _paid = true; });
     } catch (e) {

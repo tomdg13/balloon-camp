@@ -28,6 +28,8 @@ class ApiService {
     headers: {'Content-Type': 'application/json'},
   ));
 
+  Dio get dioForExport => _dio;
+
   void setToken(String token) {
     _dio.options.headers['Authorization'] = 'Bearer $token';
   }
@@ -117,9 +119,9 @@ class ApiService {
     return res.data['slip_url'];
   }
 
-  Future<void> verifyPayment(int billId, String status, {String? note}) async {
+  Future<void> verifyPayment(int billId, String status, {String? note, String? paymentMethod}) async {
     await _dio.post(ApiConfig.billVerify(billId),
-        data: {'status': status, 'note': note});
+        data: {'status': status, 'note': note, 'payment_method': paymentMethod});
   }
 
   // ── Menu image ─────────────────────────────────────────────
@@ -220,4 +222,51 @@ class ApiService {
     final res = await _dio.post('/api/staff/settings/logo', data: form);
     return res.data['logo_url'];
   }
+
+  // ── Reports ────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getReportSummary(String from, String to) async {
+    final res = await _dio.get('/api/reports/summary', queryParameters: {'from': from, 'to': to});
+    return Map<String, dynamic>.from(res.data['data']);
+  }
+
+  Future<List<dynamic>> getReportDaily(String from, String to) async {
+    final res = await _dio.get('/api/reports/daily', queryParameters: {'from': from, 'to': to});
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<List<dynamic>> getReportTopItems(String from, String to, {int limit = 10}) async {
+    final res = await _dio.get('/api/reports/top-items', queryParameters: {'from': from, 'to': to, 'limit': limit});
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<List<dynamic>> getReportPaymentMethods(String from, String to) async {
+    final res = await _dio.get('/api/reports/payment-methods', queryParameters: {'from': from, 'to': to});
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<Uint8List> exportReportCsv(String from, String to) async {
+    final res = await _dio.get(
+      '/api/reports/export',
+      queryParameters: {'from': from, 'to': to},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(List<int>.from(res.data));
+  }
+
+
+  Future<List<dynamic>> getReportTransactions(String from, String to) async {
+    final res = await _dio.get('/api/reports/transactions', queryParameters: {'from': from, 'to': to});
+    return List<dynamic>.from(res.data['data']);
+  }
+
+
+  Future<int?> getBillIdByOrder(int orderId) async {
+    try {
+      final res = await _dio.get('/api/bills/by-order/$orderId');
+      return res.data['bill_id'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
 }
