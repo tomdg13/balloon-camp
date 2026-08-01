@@ -16,7 +16,7 @@ class ApiService {
         requestHeader: false,
         responseHeader: false,
         error: true,
-        logPrint: (o) => print('\ud83c\udf10 ' + o.toString()),
+        logPrint: (o) => debugPrint('🌐 ' + o.toString()),
       ));
     }
   }
@@ -110,6 +110,15 @@ class ApiService {
     return Bill.fromJson(res.data['data']);
   }
 
+  Future<int?> getBillIdByOrder(int orderId) async {
+    try {
+      final res = await _dio.get('/api/bills/by-order/$orderId');
+      return res.data['bill_id'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<String> uploadPaymentSlip(int billId, File imageFile, String method) async {
     final form = FormData.fromMap({
       'slip': await MultipartFile.fromFile(imageFile.path, filename: 'slip.jpg'),
@@ -128,6 +137,14 @@ class ApiService {
   Future<String> uploadMenuImage(int itemId, File imageFile) async {
     final form = FormData.fromMap({
       'image': await MultipartFile.fromFile(imageFile.path, filename: 'item.jpg'),
+    });
+    final res = await _dio.post(ApiConfig.menuItemImage(itemId), data: form);
+    return res.data['image_url'];
+  }
+
+  Future<String> uploadMenuImageBytes(int itemId, Uint8List bytes, String filename) async {
+    final form = FormData.fromMap({
+      'image': MultipartFile.fromBytes(bytes, filename: filename),
     });
     final res = await _dio.post(ApiConfig.menuItemImage(itemId), data: form);
     return res.data['image_url'];
@@ -153,6 +170,7 @@ class ApiService {
     await _dio.patch('/api/staff/$id', data: data);
   }
 
+  // ── Table management ───────────────────────────────────────
   Future<void> createTable({required String tableNumber, required int capacity}) async {
     await _dio.post('/api/tables', data: {'table_number': tableNumber, 'capacity': capacity});
   }
@@ -165,6 +183,7 @@ class ApiService {
     await _dio.delete('/api/tables/$id');
   }
 
+  // ── Menu management ────────────────────────────────────────
   Future<void> createMenuItem({required int categoryId, required String nameLao, String? nameEn, double price = 0}) async {
     await _dio.post('/api/menu/items', data: {'category_id': categoryId, 'name_lao': nameLao, 'name_en': nameEn, 'price': price});
   }
@@ -173,16 +192,7 @@ class ApiService {
     await _dio.patch('/api/menu/items/$id', data: data);
   }
 
-  // Upload image from web (bytes)
-  Future<String> uploadMenuImageBytes(int itemId, Uint8List bytes, String filename) async {
-    final form = FormData.fromMap({
-      'image': MultipartFile.fromBytes(bytes, filename: filename),
-    });
-    final res = await _dio.post(ApiConfig.menuItemImage(itemId), data: form);
-    return res.data['image_url'];
-  }
-
-  // Upload payment slip from web (bytes)
+  // ── Payment slip (web) ─────────────────────────────────────
   Future<String> uploadPaymentSlipBytes(int billId, dynamic bytes, String filename) async {
     final form = FormData.fromMap({
       'slip': MultipartFile.fromBytes(bytes, filename: filename),
@@ -192,6 +202,7 @@ class ApiService {
     return res.data['slip_url'];
   }
 
+  // ── Settings ───────────────────────────────────────────────
   Future<Map<String, dynamic>> getSettings() async {
     final res = await _dio.get('/api/staff/settings');
     return Map<String, dynamic>.from(res.data['data'] ?? {});
@@ -221,6 +232,26 @@ class ApiService {
     final form = FormData.fromMap({'image': MultipartFile.fromBytes(bytes, filename: filename)});
     final res = await _dio.post('/api/staff/settings/logo', data: form);
     return res.data['logo_url'];
+  }
+
+  // ── Kitchen ────────────────────────────────────────────────
+  Future<bool> toggleItemPrepared(int orderId, int itemId, bool prepared) async {
+    final res = await _dio.patch('/api/orders/$orderId/items/$itemId/prepared',
+        data: {'prepared': prepared});
+    return res.data['all_prepared'] == true;
+  }
+
+  Future<void> callWaiter(int orderId) async {
+    await _dio.patch('/api/orders/$orderId/call-waiter');
+  }
+
+  Future<List<dynamic>> getWaiterCalls() async {
+    final res = await _dio.get('/api/orders/waiter-calls/list');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> clearWaiterCall(int orderId) async {
+    await _dio.patch('/api/orders/$orderId/call-waiter/clear');
   }
 
   // ── Reports ────────────────────────────────────────────────
@@ -253,48 +284,26 @@ class ApiService {
     return Uint8List.fromList(List<int>.from(res.data));
   }
 
-
   Future<List<dynamic>> getReportTransactions(String from, String to) async {
     final res = await _dio.get('/api/reports/transactions', queryParameters: {'from': from, 'to': to});
     return List<dynamic>.from(res.data['data']);
   }
 
-
-  Future<int?> getBillIdByOrder(int orderId) async {
-    try {
-      final res = await _dio.get('/api/bills/by-order/$orderId');
-      return res.data['bill_id'] as int?;
-    } catch (_) {
-      return null;
-    }
+  // ── Table operations ───────────────────────────────────────
+  Future<void> moveTable(int orderId, int newTableId) async {
+    await _dio.post('/api/orders/$orderId/move-table',
+        data: {'new_table_id': newTableId});
   }
 
-
-  Future<bool> toggleItemPrepared(int orderId, int itemId, bool prepared) async {
-    final res = await _dio.patch('/api/orders/$orderId/items/$itemId/prepared',
-        data: {'prepared': prepared});
-    return res.data['all_prepared'] == true;
+  Future<List<dynamic>> splitBill(int orderId, List<List<int>> groups) async {
+    final res = await _dio.post('/api/orders/$orderId/split-bill',
+        data: {'groups': groups});
+    return List<dynamic>.from(res.data['split']);
   }
 
-
-  Future<void> callWaiter(int orderId) async {
-    await _dio.patch('/api/orders/$orderId/call-waiter');
+  Future<Map<String, dynamic>> mergeBills(List<int> orderIds) async {
+    final res = await _dio.post('/api/orders/merge-bill',
+        data: {'order_ids': orderIds});
+    return Map<String, dynamic>.from(res.data);
   }
-
-
-  Future<bool> cancelItem(int orderId, int itemId) async {
-    final res = await _dio.patch('/api/orders/$orderId/items/$itemId/cancel');
-    return res.data['all_prepared'] == true;
-  }
-
-
-  Future<List<dynamic>> getWaiterCalls() async {
-    final res = await _dio.get('/api/orders/waiter-calls/list');
-    return List<dynamic>.from(res.data['data']);
-  }
-
-  Future<void> clearWaiterCall(int orderId) async {
-    await _dio.patch('/api/orders/$orderId/call-waiter/clear');
-  }
-
 }
