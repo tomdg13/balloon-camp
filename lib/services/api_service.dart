@@ -269,4 +269,32 @@ class ApiService {
     }
   }
 
+
+  Future<bool> toggleItemPrepared(int orderId, int itemId, bool prepared) async {
+    final res = await _dio.patch('/api/orders/$orderId/items/$itemId/prepared',
+        data: {'prepared': prepared});
+    return res.data['all_prepared'] == true;
+  }
+
+
+  Future<void> callWaiter(int orderId) async {
+    await _dio.patch('/api/orders/$orderId/call-waiter');
+  }
+
+
+  Future<bool> cancelItem(int orderId, int itemId) async {
+    final res = await _dio.patch('/api/orders/$orderId/items/$itemId/cancel');
+    return res.data['all_prepared'] == true;
+  }
+
+
+  Future<List<dynamic>> getWaiterCalls() async {
+    final res = await _dio.get('/api/orders/waiter-calls/list');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> clearWaiterCall(int orderId) async {
+    await _dio.patch('/api/orders/$orderId/call-waiter/clear');
+  }
+
 }

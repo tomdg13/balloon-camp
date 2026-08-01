@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class KitchenScreen extends StatefulWidget {
   const KitchenScreen({super.key});
@@ -18,7 +19,6 @@ class _KitchenScreenState extends State<KitchenScreen> {
   void initState() {
     super.initState();
     _loadOrders();
-    // Auto-refresh every 15 seconds
     _timer = Timer.periodic(const Duration(seconds: 15), (_) => _loadOrders());
   }
 
@@ -34,24 +34,6 @@ class _KitchenScreenState extends State<KitchenScreen> {
       if (mounted) setState(() { _orders = orders; _loading = false; });
     } catch (e) {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _markReady(int orderId) async {
-    try {
-      await ApiService().updateOrderStatus(orderId, 'ready');
-      await _loadOrders();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ອໍເດີພ້ອມແລ້ວ ✓'),
-                backgroundColor: Color(0xFF4CAF50)));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
-                backgroundColor: const Color(0xFFE94560)));
-      }
     }
   }
 
@@ -73,7 +55,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                   decoration: BoxDecoration(
                       color: const Color(0xFFE94560),
                       borderRadius: BorderRadius.circular(12)),
-                  child: Text('\${_orders.length}',
+                  child: Text('${_orders.length}',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               const Spacer(),
@@ -104,7 +86,7 @@ class _KitchenScreenState extends State<KitchenScreen> {
                     itemCount: _orders.length,
                     itemBuilder: (_, i) => _OrderCard(
                       order: _orders[i],
-                      onReady: () => _markReady(_orders[i].id),
+                      onAllPrepared: _loadOrders,
                     ),
                   ),
                 ),
@@ -116,22 +98,56 @@ class _KitchenScreenState extends State<KitchenScreen> {
 
 class _OrderCard extends StatefulWidget {
   final Order order;
-  final VoidCallback onReady;
-  const _OrderCard({required this.order, required this.onReady});
+  final VoidCallback onAllPrepared;
+  const _OrderCard({required this.order, required this.onAllPrepared});
   @override
   State<_OrderCard> createState() => _OrderCardState();
 }
 
 class _OrderCardState extends State<_OrderCard> {
   Map<String, dynamic>? _detail;
-  bool _expanded = false;
+  bool _loadingDetail = true;
+  final Set<int> _togglingIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetail();
+  }
 
   Future<void> _loadDetail() async {
-    if (_detail != null) return;
     try {
       final d = await ApiService().getOrderDetail(widget.order.id);
-      if (mounted) setState(() => _detail = d);
-    } catch (_) {}
+      if (mounted) setState(() { _detail = d; _loadingDetail = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingDetail = false);
+    }
+  }
+
+  Future<void> _toggleItem(int itemId, bool newValue) async {
+    setState(() => _togglingIds.add(itemId));
+    try {
+      final allPrepared = await ApiService().toggleItemPrepared(widget.order.id, itemId, newValue);
+      // Reload fresh detail from server to reflect the real state (avoids mutating an unmodifiable list)
+      final d = await ApiService().getOrderDetail(widget.order.id);
+      if (mounted) {
+        setState(() {
+          _detail = d;
+          _togglingIds.remove(itemId);
+        });
+      }
+      if (allPrepared) {
+        await ApiService().callWaiter(widget.order.id);
+        widget.onAllPrepared();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _togglingIds.remove(itemId));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
+                backgroundColor: const Color(0xFFE94560)));
+      }
+    }
   }
 
   @override
@@ -139,6 +155,8 @@ class _OrderCardState extends State<_OrderCard> {
     final order = widget.order;
     final elapsed = DateTime.now().difference(order.createdAt);
     final isUrgent = elapsed.inMinutes >= 15;
+    final items = _detail?['items'] as List? ?? [];
+    final doneCount = items.where((it) => it['prepared'] == 1).length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -151,7 +169,6 @@ class _OrderCardState extends State<_OrderCard> {
       ),
       child: Column(
         children: [
-          // Header
           ListTile(
             leading: Container(
               width: 48, height: 48,
@@ -167,105 +184,111 @@ class _OrderCardState extends State<_OrderCard> {
                         fontSize: 16)),
               ),
             ),
-            title: Text('ໂຕະ ${order.tableNumber} · ${order.itemCount} ລາຍການ',
+            title: Text('ໂຕະ ${order.tableNumber} · $doneCount/${items.length} ລາຍການ',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             subtitle: Text(
               '${elapsed.inMinutes} ນາທີທີ່ຜ່ານມາ · ${order.staffName}',
               style: TextStyle(
                   color: isUrgent ? const Color(0xFFFF9800) : Colors.white54),
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more,
-                      color: Colors.white54),
-                  onPressed: () {
-                    setState(() => _expanded = !_expanded);
-                    if (_expanded) _loadDetail();
-                  },
-                ),
-              ],
-            ),
           ),
 
-          // Items detail (expandable)
-          if (_expanded)
-            _detail == null
-                ? const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(color: Color(0xFFE94560)))
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Column(
-                      children: [
-                        ...(_detail!['items'] as List).map((item) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 28, height: 28,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE94560),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Center(
-                                      child: Text('${item['quantity']}',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13)),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(item['name_lao'],
-                                        style: const TextStyle(
-                                            color: Colors.white, fontSize: 14)),
-                                  ),
-                                  if (item['note'] != null && item['note'] != '')
-                                    Text(item['note'],
-                                        style: const TextStyle(
-                                            color: Colors.white38, fontSize: 12)),
-                                ],
-                              ),
-                            )),
-                        if (_detail!['note'] != null && _detail!['note'] != '')
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
+          _loadingDetail
+              ? const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(color: Color(0xFFE94560)))
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Column(
+                    children: [
+                      ...items.map((item) {
+                        final itemId = item['id'] as int;
+                        final isPrepared = item['prepared'] == 1;
+                        final isCancelled = item['cancelled'] == 1;
+                        final isToggling = _togglingIds.contains(itemId);
+                        return InkWell(
+                          onTap: (isToggling || isPrepared) ? null : () => _toggleItem(itemId, true),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
-                                const Icon(Icons.note, color: Colors.white38, size: 16),
-                                const SizedBox(width: 8),
-                                Text(_detail!['note'],
-                                    style: const TextStyle(
-                                        color: Colors.white54, fontSize: 13)),
+                                isToggling
+                                    ? const SizedBox(
+                                        width: 24, height: 24,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE94560)))
+                                    : Checkbox(
+                                        value: isPrepared,
+                                        activeColor: const Color(0xFF4CAF50),
+                                        onChanged: isPrepared ? null : (v) => _toggleItem(itemId, true),
+                                      ),
+                                if (item['image_url'] != null) ...[
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: CachedNetworkImage(
+                                      imageUrl: item['image_url'],
+                                      width: 36, height: 36,
+                                      fit: BoxFit.cover,
+                                      errorWidget: (_, __, ___) => Container(
+                                        width: 36, height: 36,
+                                        color: const Color(0xFF0F3460),
+                                        child: const Icon(Icons.restaurant, color: Colors.white38, size: 18),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Container(
+                                  width: 28, height: 28,
+                                  decoration: BoxDecoration(
+                                    color: isPrepared ? const Color(0xFF4CAF50) : const Color(0xFFE94560),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Center(
+                                    child: Text('${item['quantity']}',
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13)),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                      isCancelled ? '${item['name_lao']} (ຍົກເລີກ)' : item['name_lao'],
+                                      style: TextStyle(
+                                          color: isCancelled
+                                              ? const Color(0xFFE94560)
+                                              : (isPrepared ? Colors.white38 : Colors.white),
+                                          fontSize: 14,
+                                          decoration: (isPrepared || isCancelled) ? TextDecoration.lineThrough : null)),
+                                ),
+                                if (item['note'] != null && item['note'] != '')
+                                  Text(item['note'],
+                                      style: const TextStyle(
+                                          color: Colors.white38, fontSize: 12)),
+
                               ],
                             ),
                           ),
-                      ],
-                    ),
+                        );
+                      }),
+                      if (_detail?['note'] != null && _detail!['note'] != '')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.note, color: Colors.white38, size: 16),
+                              const SizedBox(width: 8),
+                              Text(_detail!['note'],
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-
-          // Ready button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton.icon(
-                onPressed: widget.onReady,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.check, color: Colors.white),
-                label: const Text('ອາຫານພ້ອມແລ້ວ',
-                    style: TextStyle(color: Colors.white, fontSize: 15)),
-              ),
-            ),
-          ),
         ],
       ),
     );

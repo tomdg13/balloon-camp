@@ -12,6 +12,7 @@ import 'menu_management_screen.dart';
 import 'settings_screen.dart';
 import 'qr_screen.dart';
 import 'reports_hub_screen.dart';
+import 'waiter_calls_screen.dart';
 
 // ── Page index constants ──────────────────────────────────────
 const int kPageTables  = 0;
@@ -21,6 +22,7 @@ const int kPageTableMgmt = 3;
 const int kPageMenuMgmt = 4;
 const int kPageSettings = 5;
 const int kPageReports = 6;
+const int kPageWaiterCalls = 7;
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -48,6 +50,7 @@ class _MainScreenState extends State<MainScreen> {
       const MenuManagementScreen(),
       const SettingsScreen(),
       const ReportsHubScreen(),
+      const WaiterCallsScreen(),
     ];
 
     if (isWeb) {
@@ -108,6 +111,7 @@ class _MainScreenState extends State<MainScreen> {
       case kPageMenuMgmt: return 'ຈັດການເມນູ';
       case kPageSettings: return 'ຕັ້ງຄ່າຮ້ານ';
       case kPageReports: return 'ລາຍງານ';
+      case kPageWaiterCalls: return 'ອາຫານພ້ອມ';
       default:           return 'Balloon Camp';
     }
   }
@@ -165,6 +169,7 @@ class _SideNav extends StatelessWidget {
           _item(context, Icons.table_restaurant, 'ເລືອກໂຕະ', kPageTables),
           if (isAdmin || isKitchen)
             _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
+          _item(context, Icons.notifications_active, 'ອາຫານພ້ອມ', kPageWaiterCalls),
 
           if (isAdmin) ...[
             const Padding(
