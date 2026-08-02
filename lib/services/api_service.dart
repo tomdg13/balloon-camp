@@ -306,4 +306,14 @@ class ApiService {
         data: {'order_ids': orderIds});
     return Map<String, dynamic>.from(res.data);
   }
+
+  Future<List<dynamic>> getItemsReady() async {
+    final res = await _dio.get('/api/orders/items-ready/list');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> markItemServed(int itemId) async {
+    await _dio.patch('/api/orders/items/$itemId/served');
+  }
+
 }
