@@ -73,15 +73,19 @@ class _TableOperationsScreenState extends State<TableOperationsScreen> {
         table: table,
         onMoveTable: () async {
           Navigator.pop(context);
-          // Get active order for this table
-          final orders = await _api.getOrders(status: 'sent_to_kitchen');
-          final order = orders.firstWhere(
-            (o) => o.tableId == table.id,
-            orElse: () => orders.firstWhere(
-              (o) => o.tableId == table.id,
-              orElse: () => throw Exception('ບໍ່ພົບອໍເດີສຳລັບໂຕະນີ້'),
-            ),
-          );
+          final orders = await _api.getOrders();
+          final activeOrders = orders.where((o) =>
+              o.tableNumber == table.tableNumber &&
+              !['paid', 'cancelled'].contains(o.status)).toList();
+          if (activeOrders.isEmpty) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('ບໍ່ພົບອໍເດີສຳລັບໂຕະນີ້'),
+                  backgroundColor: Color(0xFFE94560)),
+            );
+            return;
+          }
+          final order = activeOrders.first;
           if (!mounted) return;
           final result = await Navigator.push(
             context,
@@ -98,7 +102,7 @@ class _TableOperationsScreenState extends State<TableOperationsScreen> {
           Navigator.pop(context);
           final orders = await _api.getOrders();
           final tableOrders = orders.where((o) =>
-              o.tableId == table.id &&
+              o.tableNumber == table.tableNumber &&
               !['paid', 'cancelled'].contains(o.status)).toList();
           if (tableOrders.isEmpty) {
             if (!mounted) return;
@@ -124,7 +128,7 @@ class _TableOperationsScreenState extends State<TableOperationsScreen> {
           Navigator.pop(context);
           final orders = await _api.getOrders();
           final tableOrders = orders.where((o) =>
-              o.tableId == table.id &&
+              o.tableNumber == table.tableNumber &&
               !['paid', 'cancelled'].contains(o.status)).toList();
           if (tableOrders.isEmpty) {
             if (!mounted) return;
