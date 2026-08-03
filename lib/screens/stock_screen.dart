@@ -33,6 +33,16 @@ class _StockScreenState extends State<StockScreen> {
     return qty <= threshold;
   }
 
+  int? _daysUntilExpiry(dynamic item) {
+    final expiryStr = item['expiry_date'];
+    if (expiryStr == null) return null;
+    final expiry = DateTime.tryParse(expiryStr.toString());
+    if (expiry == null) return null;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    return expiry.difference(todayDate).inDays;
+  }
+
   String _categoryLabel(String? cat) {
     switch (cat) {
       case 'meat':
@@ -79,6 +89,7 @@ class _StockScreenState extends State<StockScreen> {
     final qtyCtrl = TextEditingController(text: item?['quantity']?.toString() ?? '0');
     final thresholdCtrl = TextEditingController(text: item?['low_stock_threshold']?.toString() ?? '1');
     String category = item?['category'] ?? 'meat';
+    DateTime? expiryDate = item?['expiry_date'] != null ? DateTime.tryParse(item!['expiry_date'].toString()) : null;
 
     final result = await showDialog<bool>(
       context: context,
@@ -143,6 +154,31 @@ class _StockScreenState extends State<StockScreen> {
                   keyboardType: TextInputType.number,
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(labelText: 'ແຈ້ງເຕືອນເມື່ອຕ່ຳກວ່າ', labelStyle: TextStyle(color: Colors.white54)),
+                ),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: dCtx,
+                      initialDate: expiryDate ?? DateTime.now(),
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) setDlg(() => expiryDate = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'ວັນທີ່ໝົດອາຍຸ',
+                      labelStyle: TextStyle(color: Colors.white54),
+                      suffixIcon: Icon(Icons.calendar_today, color: Colors.white54, size: 18),
+                    ),
+                    child: Text(
+                      expiryDate != null
+                          ? '${expiryDate!.year}-${expiryDate!.month.toString().padLeft(2, '0')}-${expiryDate!.day.toString().padLeft(2, '0')}'
+                          : 'ຄິດໄລ່ອັດຕະໂນມັດ',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -289,6 +325,21 @@ class _StockScreenState extends State<StockScreen> {
                                       const SizedBox(height: 2),
                                       Text("${_categoryLabel(item['category'])} \u00b7 ${qty.toStringAsFixed(1)} ${item['unit']}",
                                           style: TextStyle(color: isLow ? const Color(0xFFE94560) : Colors.white54, fontSize: 12)),
+                                      Builder(builder: (_) {
+                                        final days = _daysUntilExpiry(item);
+                                        if (days == null) return const SizedBox();
+                                        final expired = days < 0;
+                                        final soon = days <= 1;
+                                        final label = expired ? 'ໝົດອາຍຸແລ້ວ' : (days == 0 ? 'ໝົດອາຍຸມື້ນີ້' : 'ອີກ $days ມື້ໝົດອາຍຸ');
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(label,
+                                              style: TextStyle(
+                                                  color: (expired || soon) ? const Color(0xFFE94560) : Colors.white38,
+                                                  fontSize: 11,
+                                                  fontWeight: (expired || soon) ? FontWeight.bold : FontWeight.normal)),
+                                        );
+                                      }),
                                     ],
                                   ),
                                 ),

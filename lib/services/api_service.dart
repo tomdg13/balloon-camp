@@ -363,4 +363,10 @@ class ApiService {
     await _dio.delete('/api/stock/$id');
   }
 
+
+  Future<List<dynamic>> getExpiringStockItems() async {
+    final res = await _dio.get('/api/stock/expiring');
+    return List<dynamic>.from(res.data['data']);
+  }
+
 }
