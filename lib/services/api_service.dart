@@ -316,4 +316,51 @@ class ApiService {
     await _dio.patch('/api/orders/items/$itemId/served');
   }
 
+
+  Future<void> deleteMenuItem(int itemId) async {
+    await _dio.delete('/api/menu/items/$itemId');
+  }
+
+
+  Future<int> createCategory({required String nameLao, String? nameEn, int sortOrder = 0}) async {
+    final res = await _dio.post('/api/menu/categories',
+        data: {'name_lao': nameLao, 'name_en': nameEn, 'sort_order': sortOrder});
+    return res.data['id'] as int;
+  }
+
+  Future<void> updateCategory(int id, Map<String, dynamic> data) async {
+    await _dio.patch('/api/menu/categories/$id', data: data);
+  }
+
+  Future<void> deleteCategory(int id) async {
+    await _dio.delete('/api/menu/categories/$id');
+  }
+
+
+  Future<List<dynamic>> getStockItems() async {
+    final res = await _dio.get('/api/stock');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<List<dynamic>> getLowStockItems() async {
+    final res = await _dio.get('/api/stock/low');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> createStockItem(Map<String, dynamic> data) async {
+    await _dio.post('/api/stock', data: data);
+  }
+
+  Future<void> updateStockItem(int id, Map<String, dynamic> data) async {
+    await _dio.patch('/api/stock/$id', data: data);
+  }
+
+  Future<void> adjustStockItem(int id, double delta) async {
+    await _dio.patch('/api/stock/$id/adjust', data: {'delta': delta});
+  }
+
+  Future<void> deleteStockItem(int id) async {
+    await _dio.delete('/api/stock/$id');
+  }
+
 }

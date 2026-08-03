@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
@@ -188,6 +189,120 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     }
   }
 
+  Future<void> _showCategoryDialog({MenuCategory? category}) async {
+    final nameLaoCtrl = TextEditingController(text: category?.nameLao ?? '');
+    final nameEnCtrl = TextEditingController(text: category?.nameEn ?? '');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: Text(category == null ? 'ເພີ່ມໝວດໝູ່' : 'ແກ້ໄຂໝວດໝູ່',
+            style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dlgField('ຊື່ໝວດໝູ່ (ລາວ)', nameLaoCtrl, Icons.category),
+            const SizedBox(height: 12),
+            _dlgField('ຊື່ໝວດໝູ່ (English)', nameEnCtrl, Icons.language),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('ບັນທຶກ', style: TextStyle(color: Color(0xFFE94560))),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true || nameLaoCtrl.text.trim().isEmpty) return;
+
+    try {
+      if (category == null) {
+        await ApiService().createCategory(nameLao: nameLaoCtrl.text.trim(), nameEn: nameEnCtrl.text.trim());
+        _showSuccess('ເພີ່ມໝວດໝູ່ສຳເລັດ');
+      } else {
+        await ApiService().updateCategory(category.id, {
+          'name_lao': nameLaoCtrl.text.trim(),
+          'name_en': nameEnCtrl.text.trim(),
+        });
+        _showSuccess('ແກ້ໄຂໝວດໝູ່ສຳເລັດ');
+      }
+      await _load();
+    } catch (e) {
+      _showError('ເກີດຂໍ້ຜິດພາດ: $e');
+    }
+  }
+
+  Future<void> _confirmDeleteCategory(MenuCategory category) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: const Text('ລຶບໝວດໝູ່?', style: TextStyle(color: Colors.white)),
+        content: Text('ຕ້ອງການລຶບ "${category.nameLao}" ອອກແທ້ບໍ?',
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ລຶບ', style: TextStyle(color: Color(0xFFE94560))),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await ApiService().deleteCategory(category.id);
+      if (_selectedCategoryId == category.id) _selectedCategoryId = null;
+      await _load();
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message;
+      _showError('$msg');
+    } catch (e) {
+      _showError('ເກີດຂໍ້ຜິດພາດ: $e');
+    }
+  }
+
+  Future<void> _confirmDelete(MenuItem item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: const Text('ລຶບເມນູ?', style: TextStyle(color: Colors.white)),
+        content: Text('ຕ້ອງການລຶບ "${item.nameLao}" ອອກຈາກເມນູແທ້ບໍ?',
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ລຶບ', style: TextStyle(color: Color(0xFFE94560))),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await ApiService().deleteMenuItem(item.id);
+      await _load();
+    } catch (e) {
+      _showError('ເກີດຂໍ້ຜິດພາດ: $e');
+    }
+  }
+
   InputDecoration _inputDeco(String label, IconData icon) => InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white54),
@@ -247,9 +362,19 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             ),
             child: Column(children: [
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: const Text('ໝວດໝູ່',
-                    style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('ໝວດໝູ່',
+                          style: const TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
+                    ),
+                    GestureDetector(
+                      onTap: () => _showCategoryDialog(),
+                      child: const Icon(Icons.add_circle_outline, color: Colors.white38, size: 18),
+                    ),
+                  ],
+                ),
               ),
               Expanded(
                 child: ListView.builder(
@@ -277,6 +402,20 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                         subtitle: Text('$withImg/${cat.items.length} ມີຮູບ',
                             style: const TextStyle(color: Colors.white38, fontSize: 10)),
                         onTap: () => setState(() => _selectedCategoryId = cat.id),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () => _showCategoryDialog(category: cat),
+                              child: const Icon(Icons.edit, color: Colors.white38, size: 14),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => _confirmDeleteCategory(cat),
+                              child: const Icon(Icons.delete_outline, color: Color(0xFFE94560), size: 14),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -308,6 +447,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                         onUpload: () => _uploadImage(item),
                         onEdit: () => _showItemDialog(item: item),
                         onToggle: () => _toggleAvailable(item),
+                        onDelete: () => _confirmDelete(item),
                       );
                     },
                   ),
@@ -323,6 +463,7 @@ class _MenuCard extends StatelessWidget {
   final VoidCallback onUpload;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
+  final VoidCallback onDelete;
 
   const _MenuCard({
     required this.item,
@@ -330,6 +471,7 @@ class _MenuCard extends StatelessWidget {
     required this.onUpload,
     required this.onEdit,
     required this.onToggle,
+    required this.onDelete,
   });
 
   @override
@@ -501,6 +643,18 @@ class _MenuCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(Icons.edit, color: Color(0xFF2196F3), size: 14),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: onDelete,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE94560).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.delete_outline, color: Color(0xFFE94560), size: 14),
                       ),
                     ),
                   ]),

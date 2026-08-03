@@ -13,6 +13,7 @@ import 'settings_screen.dart';
 import 'qr_screen.dart';
 import 'reports_hub_screen.dart';
 import 'waiter_calls_screen.dart';
+import 'stock_screen.dart';
 import 'table_operations_screen.dart';
 
 // ── Page index constants ──────────────────────────────────────
@@ -25,6 +26,7 @@ const int kPageSettings = 5;
 const int kPageReports = 6;
 const int kPageWaiterCalls = 7;
 const int kPageTableOps = 8;
+const int kPageStock = 9;
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -54,6 +56,7 @@ class _MainScreenState extends State<MainScreen> {
       const ReportsHubScreen(),
       const WaiterCallsScreen(),
       const TableOperationsScreen(),
+      const StockScreen(),
     ];
 
     if (isWeb) {
@@ -115,6 +118,7 @@ class _MainScreenState extends State<MainScreen> {
       case kPageSettings: return 'ຕັ້ງຄ່າຮ້ານ';
       case kPageReports: return 'ລາຍງານ';
       case kPageWaiterCalls: return 'ອາຫານພ້ອມ';
+      case kPageStock: return 'ຄັງວັດຖຸດິບ';
       case kPageTableOps: return 'ຈັດການໂຕະລູກຄ້າ';
       default:           return 'Balloon Camp';
     }
@@ -185,6 +189,7 @@ class _SideNav extends StatelessWidget {
             _item(context, Icons.table_bar, 'ຈັດການໂຕະ', kPageTableMgmt),
             _item(context, Icons.restaurant_menu, 'ຈັດການເມນູ', kPageMenuMgmt),
             _item(context, Icons.settings, 'ຕັ້ງຄ່າຮ້ານ', kPageSettings),
+            _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock),
             _item(context, Icons.bar_chart, 'ລາຍງານ', kPageReports),
             _item(context, Icons.swap_horiz, 'ຈັດການໂຕະລູກຄ້າ', kPageTableOps),
           ],
