@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html_lib;
+import '../utils/print_helper.dart';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,10 +25,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final _cashCtrl = TextEditingController();
   double _change = 0;
   double _totalAmt = 0;
-  dynamic _slipFile; // File or Uint8List for web
+  dynamic _slipFile;
   bool _submitting = false;
   bool _paid = false;
   String? _bankQrUrl;
+  String? _logoUrl;
 
   @override
   void initState() {
@@ -64,10 +65,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
         } catch (_) {}
       }
 
-      // Load bank QR
       try {
         final settings = await ApiService().getSettings();
-        if (mounted) setState(() => _bankQrUrl = settings['bank_qr_url']);
+        if (mounted) setState(() {
+          _bankQrUrl = settings['bank_qr_url'];
+          _logoUrl = settings['logo_url'];
+        });
       } catch (_) {}
 
       double total = 0;
@@ -100,24 +103,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _confirmPayment() async {
     setState(() => _submitting = true);
     try {
-      // Generate bills for all orders and verify
       for (final order in _orders) {
         final orderId = order['id'] as int;
-        // Generate bill
-        final bill = await ApiService().generateBill(orderId);
-        // If slip uploaded, upload it
-        if (_slipFile != null) {
-          if (kIsWeb) {
-            await ApiService().uploadPaymentSlipBytes(bill.id, _slipFile, 'slip.jpg');
+        Bill bill;
+        try {
+          bill = await ApiService().generateBill(orderId);
+        } on DioException catch (e) {
+          if (e.response?.statusCode == 409) {
+            final existingId = await ApiService().getBillIdByOrder(orderId);
+            if (existingId == null) rethrow;
+            bill = await ApiService().getBill(existingId);
           } else {
+            rethrow;
+          }
+        }
+        if (_slipFile != null) {
+          if (!kIsWeb) {
             await ApiService().uploadPaymentSlip(bill.id, _slipFile, _payMethod);
           }
         }
-        // Verify payment
         await ApiService().verifyPayment(bill.id, 'approved',
             note: _payMethod == 'cash'
                 ? 'ເງິນສົດ · ຈ່າຍ ${_cashCtrl.text} · ທອນ ${_change.toStringAsFixed(0)}'
-                : _payMethod);
+                : _payMethod,
+            paymentMethod: _payMethod);
       }
       setState(() { _submitting = false; _paid = true; });
     } catch (e) {
@@ -153,7 +162,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(children: [
-                    // Bill header
+                    // Bill header with logo
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
@@ -162,8 +171,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(children: [
-                        const Text('🎈 Balloon Camp',
-                            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        // Logo
+                        if (_logoUrl != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: _logoUrl!,
+                              width: 72,
+                              height: 72,
+                              fit: BoxFit.contain,
+                              errorWidget: (_, __, ___) =>
+                                  const Icon(Icons.store, color: Colors.white38, size: 48),
+                            ),
+                          )
+                        else
+                          const Text('🎈', style: TextStyle(fontSize: 36)),
+                        const SizedBox(height: 8),
+                        const Text('Balloon Camp',
+                            style: TextStyle(color: Colors.white, fontSize: 20,
+                                fontWeight: FontWeight.bold)),
                         Text('ໂຕະ ${widget.tableNumber}',
                             style: const TextStyle(color: Colors.white54, fontSize: 14)),
                         const SizedBox(height: 4),
@@ -216,7 +242,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                             color: Colors.white, fontSize: 13)),
                                   ),
                                   Text(
-                                    '${double.tryParse(item['line_total']?.toString() ?? '0')!.toStringAsFixed(0)} ກີບ',
+                                    '${(double.tryParse(item['line_total']?.toString() ?? '0') ?? 0).toStringAsFixed(0)} ກີບ',
                                     style: const TextStyle(
                                         color: Colors.white70, fontSize: 13),
                                   ),
@@ -230,7 +256,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   style: TextStyle(color: Colors.white54, fontSize: 13)),
                               const Spacer(),
                               Text(
-                                '${double.tryParse(order['total']?.toString() ?? '0')!.toStringAsFixed(0)} ກີບ',
+                                '${(double.tryParse(order['total']?.toString() ?? '0') ?? 0).toStringAsFixed(0)} ກີບ',
                                 style: const TextStyle(
                                     color: Color(0xFFE94560),
                                     fontWeight: FontWeight.bold,
@@ -291,7 +317,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ]),
                     const SizedBox(height: 20),
 
-                    // Cash method
+                    // ── CASH ──────────────────────────────────
                     if (_payMethod == 'cash') ...[
                       const Text('ລູກຄ້າຈ່າຍ',
                           style: TextStyle(color: Colors.white70, fontSize: 13)),
@@ -316,9 +342,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      // Quick amount buttons
                       Wrap(spacing: 8, runSpacing: 8, children: [
-                        ...[1000, 2000, 5000, 10000, 20000, 50000, 100000]
+                        ...[5000, 10000, 20000, 50000, 100000, 200000, 500000]
                             .where((v) => v >= _totalAmt)
                             .take(6)
                             .map((v) => GestureDetector(
@@ -334,14 +359,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(color: Colors.white12),
                                     ),
-                                    child: Text('${(v / 1000).toStringAsFixed(0)}K',
-                                        style: const TextStyle(
-                                            color: Colors.white70, fontSize: 12)),
+                                    child: Text(
+                                      v >= 1000
+                                          ? '${(v / 1000).toStringAsFixed(0)}K'
+                                          : '$v',
+                                      style: const TextStyle(
+                                          color: Colors.white70, fontSize: 12)),
                                   ),
                                 )),
                       ]),
                       const SizedBox(height: 16),
-                      // Change display
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -376,18 +403,94 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ],
 
-                    // QR slip upload
+                    // ── QR ────────────────────────────────────
                     if (_payMethod == 'qr') ...[
-                      const Text('ອັບໂຫລດສະລິບໂອນ',
-                          style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      // Show bank QR image
+                      if (_bankQrUrl != null) ...[
+                        const Text('ສະແກນ QR ເພື່ອຊຳລະ',
+                            style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(children: [
+                            CachedNetworkImage(
+                              imageUrl: _bankQrUrl!,
+                              width: 220,
+                              height: 220,
+                              fit: BoxFit.contain,
+                              errorWidget: (_, __, ___) =>
+                                  const Icon(Icons.qr_code, size: 100, color: Colors.black54),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${_totalAmt.toStringAsFixed(0)} ກີບ',
+                              style: const TextStyle(
+                                  color: Color(0xFFE94560),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text('PromptPay / BCEL / LDB',
+                                style: TextStyle(color: Colors.black54, fontSize: 11)),
+                          ]),
+                        ),
+                        const SizedBox(height: 14),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F3460),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(children: [
+                            Icon(Icons.info_outline, color: Colors.white38, size: 18),
+                            SizedBox(width: 8),
+                            Text('ຍັງບໍ່ມີ QR ຮ້ານ\nກະລຸນາຕັ້ງຄ່າໃນ ຕັ້ງຄ່າຮ້ານ',
+                                style: TextStyle(color: Colors.white38, fontSize: 12)),
+                          ]),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      // Slip upload (optional)
+                      const Text('ອັບໂຫລດສະລິບ (ຖ້າມີ)',
+                          style: TextStyle(color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 8),
                       _slipUploadWidget(),
                     ],
 
-                    // POS slip upload
+                    // ── POS ───────────────────────────────────
                     if (_payMethod == 'pos') ...[
-                      const Text('ອັບໂຫລດໃບ POS',
-                          style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F3460),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.credit_card,
+                              color: Color(0xFF2196F3), size: 28),
+                          const SizedBox(width: 12),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Text('POS Card',
+                                style: TextStyle(color: Colors.white,
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text('${_totalAmt.toStringAsFixed(0)} ກີບ',
+                                style: const TextStyle(
+                                    color: Color(0xFFE94560),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold)),
+                          ]),
+                        ]),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text('ອັບໂຫລດໃບ POS (ຖ້າມີ)',
+                          style: TextStyle(color: Colors.white54, fontSize: 12)),
                       const SizedBox(height: 8),
                       _slipUploadWidget(),
                     ],
@@ -448,7 +551,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (_payMethod == 'cash') {
       return _change >= 0 && _cashCtrl.text.isNotEmpty;
     }
-    return true; // QR and POS can pay without slip
+    return true;
   }
 
   Widget _methodBtn(String method, IconData icon, String label) => Expanded(
@@ -488,7 +591,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         onTap: _pickSlip,
         child: Container(
           width: double.infinity,
-          height: 160,
+          height: 120,
           decoration: BoxDecoration(
             color: const Color(0xFF0F3460),
             borderRadius: BorderRadius.circular(12),
@@ -508,14 +611,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
               : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(
                     _payMethod == 'qr' ? Icons.qr_code_scanner : Icons.receipt,
-                    color: Colors.white38, size: 40,
+                    color: Colors.white24, size: 32,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     _payMethod == 'qr' ? 'ແຕະເພື່ອອັບໂຫລດສະລິບ' : 'ແຕະເພື່ອອັບໂຫລດໃບ POS',
                     style: const TextStyle(color: Colors.white38, fontSize: 12),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   const Text('(ບໍ່ຈຳເປັນ)',
                       style: TextStyle(color: Colors.white24, fontSize: 10)),
                 ]),
@@ -524,9 +627,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _print() {
     final now = DateTime.now();
-    final dateStr = '${now.day.toString().padLeft(2,'0')}/${now.month.toString().padLeft(2,'0')}/${now.year} ${now.hour.toString().padLeft(2,'0')}:${now.minute.toString().padLeft(2,'0')}';
+    final dateStr =
+        '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year} '
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-    // Build HTML bill for printing
     final itemRows = StringBuffer();
     for (final o in _orders) {
       final items = o['items'] as List? ?? [];
@@ -542,9 +646,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
       itemRows.write("""
         <tr class="subtotal">
           <td colspan="2">ລວມ #${o['id']}</td>
-          <td style="text-align:right">${double.tryParse(o['total']?.toString() ?? '0')!.toStringAsFixed(0)}</td>
+          <td style="text-align:right">${(double.tryParse(o['total']?.toString() ?? '0') ?? 0).toStringAsFixed(0)}</td>
         </tr>""");
     }
+
+    final logoHtml = _logoUrl != null
+        ? '<img src="$_logoUrl" style="width:80px;height:80px;object-fit:contain;display:block;margin:0 auto 8px;">'
+        : '<div style="font-size:32px;text-align:center;">🎈</div>';
+
+    final qrHtml = _bankQrUrl != null
+        ? '''<div style="text-align:center;margin:12px 0;">
+            <img src="$_bankQrUrl" style="width:160px;height:160px;object-fit:contain;">
+            <div style="font-size:11px;color:#666;margin-top:4px;">ສະແກນເພື່ອຊຳລະ · PromptPay / BCEL / LDB</div>
+           </div>'''
+        : '';
 
     final html = """
 <!DOCTYPE html>
@@ -567,14 +682,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
   .total-row { font-size:16px; font-weight:bold; }
   .total-row td { padding-top:8px; }
   .footer { text-align:center; margin-top:16px; font-size:11px; color:#666; }
-  @media print {
-    body { width:100%; }
-    button { display:none; }
-  }
+  @media print { body { width:100%; } button { display:none; } }
 </style>
 </head>
 <body>
-<h2>🎈 Balloon Camp</h2>
+$logoHtml
+<h2>Balloon Camp</h2>
 <div class="sub">ໂຕະ ${widget.tableNumber} · $dateStr</div>
 <div class="divider"></div>
 <table>
@@ -588,6 +701,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   </tr>
 </table>
 <div class="divider"></div>
+$qrHtml
 <div class="footer">ຂອບໃຈທີ່ໃຊ້ບໍລິການ 🙏</div>
 <br>
 <button onclick="window.print()" style="width:100%;padding:10px;background:#e94560;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">🖨️ ພິມ</button>
@@ -595,11 +709,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 </body>
 </html>""";
 
-    // Open in new window
     if (kIsWeb) {
-      final blob = html_lib.Blob([html], 'text/html');
-      final url = html_lib.Url.createObjectUrlFromBlob(blob);
-      html_lib.window.open(url, '_blank');
+      openHtmlInNewTab(html);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('ການພິມໃຊ້ໄດ້ສະເພາະ Web'),

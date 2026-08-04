@@ -206,6 +206,8 @@ class _StockScreenState extends State<StockScreen> {
       'unit': unitCtrl.text.trim(),
       'quantity': double.tryParse(qtyCtrl.text) ?? 0,
       'low_stock_threshold': double.tryParse(thresholdCtrl.text) ?? 1,
+      if (expiryDate != null)
+        'expiry_date': '${expiryDate!.year}-${expiryDate!.month.toString().padLeft(2, '0')}-${expiryDate!.day.toString().padLeft(2, '0')}',
     };
 
     try {

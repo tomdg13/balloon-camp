@@ -240,7 +240,7 @@ class _TableOperationsScreenState extends State<TableOperationsScreen> {
                       crossAxisCount: isWeb ? 6 : 3,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      childAspectRatio: 0.95,
+                      childAspectRatio: 0.85,
                     ),
                     itemCount: _tables.length,
                     itemBuilder: (_, i) {
