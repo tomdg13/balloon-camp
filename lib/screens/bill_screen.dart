@@ -8,9 +8,28 @@ import 'package:intl/intl.dart';
 import '../utils/print_helper.dart';
 import 'package:dio/dio.dart';
 
+
+String _fmtNum(double v) {
+  final s = v.toStringAsFixed(0);
+  final result = StringBuffer();
+  final reversed = s.split('').reversed.toList();
+  for (int i = 0; i < reversed.length; i++) {
+    if (i > 0 && i % 3 == 0) result.write(',');
+    result.write(reversed[i]);
+  }
+  return result.toString().split('').reversed.join();
+}
+
 class BillScreen extends StatefulWidget {
   final int orderId;
-  const BillScreen({super.key, required this.orderId});
+  final int? billId;       // if provided, load this specific bill
+  final int? splitGroup;   // if provided, filter items by this group
+  const BillScreen({
+    super.key,
+    required this.orderId,
+    this.billId,
+    this.splitGroup,
+  });
   @override
   State<BillScreen> createState() => _BillScreenState();
 }
@@ -35,27 +54,45 @@ class _BillScreenState extends State<BillScreen> {
   Future<void> _generateBill() async {
     try {
       Bill bill;
-      try {
-        bill = await ApiService().generateBill(widget.orderId);
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 409) {
-          final existingId = await ApiService().getBillIdByOrder(widget.orderId);
-          if (existingId == null) rethrow;
-          bill = await ApiService().getBill(existingId);
-        } else {
-          rethrow;
+      if (widget.billId != null) {
+        // Load specific bill directly
+        bill = await ApiService().getBill(widget.billId!);
+      } else {
+        try {
+          bill = await ApiService().generateBill(widget.orderId);
+        } on DioException catch (e) {
+          if (e.response?.statusCode == 409) {
+            final existingId = await ApiService().getBillIdByOrder(widget.orderId);
+            if (existingId == null) rethrow;
+            bill = await ApiService().getBill(existingId);
+          } else {
+            rethrow;
+          }
         }
       }
+
       List<dynamic> items = [];
       try {
         final detail = await ApiService().getOrderDetail(widget.orderId);
-        items = List<dynamic>.from(detail['items'] ?? []);
+        final allItems = List<dynamic>.from(detail['items'] ?? []);
+        // Filter by split group if provided
+        if (widget.splitGroup != null) {
+          items = allItems.where((i) {
+            final sg = i['split_group'];
+            if (sg == null) return false;
+            return sg.toString() == widget.splitGroup.toString();
+          }).toList();
+        } else {
+          items = allItems;
+        }
       } catch (_) {}
+
       try {
         final settings = await ApiService().getSettings();
         _bankQrUrl = settings['bank_qr_url'];
         _logoUrl = settings['logo_url'];
       } catch (_) {}
+
       if (mounted) setState(() { _bill = bill; _items = items; _loading = false; });
     } catch (e) {
       if (mounted) setState(() => _loading = false);
@@ -89,7 +126,6 @@ class _BillScreenState extends State<BillScreen> {
     }
   }
 
-
   void _print() {
     final itemRows = StringBuffer();
     for (final item in _items) {
@@ -98,11 +134,21 @@ class _BillScreenState extends State<BillScreen> {
           <tr>
             <td>${item['quantity']}x</td>
             <td>${item['name_lao'] ?? ''}</td>
-            <td style="text-align:right">${lineTotal.toStringAsFixed(0)}</td>
+            <td style="text-align:right">${_fmtNum(lineTotal)}</td>
           </tr>""");
     }
 
     final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+    final logoHtml = _logoUrl != null
+        ? '<img src="$_logoUrl" style="width:80px;height:80px;object-fit:contain;display:block;margin:0 auto 8px;">'
+        : '';
+    final groupBadge = widget.splitGroup != null
+        ? '<div style="text-align:center"><span style="background:#e94560;color:white;padding:3px 14px;border-radius:20px;font-size:12px;font-weight:bold;">ກຸ່ມ ${widget.splitGroup}</span></div>'
+        : '';
+    final qrHtml = _bankQrUrl != null
+        ? '<div style="text-align:center;margin:12px 0;"><img src="$_bankQrUrl" style="width:140px;height:140px;object-fit:contain;"><div style="font-size:11px;color:#666;margin-top:4px;">ສະແກນເພື່ອຊຳລະ</div></div>'
+        : '';
+
     final html = """
 <!DOCTYPE html>
 <html>
@@ -123,16 +169,14 @@ class _BillScreenState extends State<BillScreen> {
   .total-row { font-size:16px; font-weight:bold; }
   .total-row td { padding-top:8px; }
   .footer { text-align:center; margin-top:16px; font-size:11px; color:#666; }
-  @media print {
-    body { width:100%; }
-    button { display:none; }
-  }
+  @media print { body { width:100%; } button { display:none; } }
 </style>
 </head>
 <body>
-${_logoUrl != null ? "<img src=\"$_logoUrl\" style=\"width:80px;height:80px;object-fit:contain;display:block;margin:0 auto 8px;\">" : ""}
-<h2>🎈 Balloon Camp</h2>
+$logoHtml
+<h2>Balloon Camp</h2>
 <div class="sub">ໂຕະ ${_bill!.tableNumber} · $dateStr</div>
+$groupBadge
 <div class="divider"></div>
 <table>
   <tr style="font-weight:bold; border-bottom:1px solid #000">
@@ -141,11 +185,11 @@ ${_logoUrl != null ? "<img src=\"$_logoUrl\" style=\"width:80px;height:80px;obje
   $itemRows
   <tr class="total-row">
     <td colspan="2">ລວມທັງໝົດ</td>
-    <td style="text-align:right">${_bill!.total.toStringAsFixed(0)}</td>
+    <td style="text-align:right">${_fmtNum(_bill!.total)}</td>
   </tr>
 </table>
 <div class="divider"></div>
-${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src=\"$_bankQrUrl\" style=\"width:140px;height:140px;object-fit:contain;\"><div style=\"font-size:11px;color:#666;margin-top:4px;\">ສະແກນເພື່ອຊຳລະ</div></div>" : ""}
+$qrHtml
 <div class="footer">ຂອບໃຈທີ່ໃຊ້ບໍລິການ 🙏</div>
 <br>
 <button onclick="window.print()" style="width:100%;padding:10px;background:#e94560;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer">🖨️ ພິມ</button>
@@ -169,8 +213,12 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
       backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
         backgroundColor: const Color(0xFF16213E),
-        title: const Text('ບິນ & ຊຳລະເງິນ',
-            style: TextStyle(color: Colors.white)),
+        title: Text(
+          widget.splitGroup != null
+              ? 'ບິນ ກຸ່ມ ${widget.splitGroup}'
+              : 'ບິນ & ຊຳລະເງິນ',
+          style: const TextStyle(color: Colors.white),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loading
@@ -183,7 +231,6 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      // Bill card
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -192,14 +239,39 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                         ),
                         child: Column(
                           children: [
-                            const Icon(Icons.receipt_long,
-                                color: Color(0xFFE94560), size: 48),
+                            // Logo
+                            if (_logoUrl != null)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(_logoUrl!,
+                                    width: 64, height: 64, fit: BoxFit.contain),
+                              )
+                            else
+                              const Icon(Icons.receipt_long,
+                                  color: Color(0xFFE94560), size: 48),
                             const SizedBox(height: 8),
                             Text('ໂຕະ ${_bill!.tableNumber}',
                                 style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold)),
+                            // Group badge
+                            if (widget.splitGroup != null) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE94560).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFE94560)),
+                                ),
+                                child: Text('ກຸ່ມ ${widget.splitGroup}',
+                                    style: const TextStyle(
+                                        color: Color(0xFFE94560),
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            ],
                             const SizedBox(height: 20),
                             if (_items.isNotEmpty) ...[
                               const Divider(color: Colors.white12),
@@ -208,33 +280,37 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                                     child: Row(
                                       children: [
                                         Text('${item['quantity']}x',
-                                            style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                                            style: const TextStyle(
+                                                color: Colors.white54, fontSize: 13)),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(item['name_lao'] ?? '',
-                                              style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                              style: const TextStyle(
+                                                  color: Colors.white, fontSize: 13)),
                                         ),
                                         Text(
-                                            '${(double.tryParse(item['line_total'].toString()) ?? 0).toStringAsFixed(0)} ກີບ',
-                                            style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                            '${_fmtNum(double.tryParse(item['line_total'].toString()) ?? 0)} ກີບ',
+                                            style: const TextStyle(
+                                                color: Colors.white70, fontSize: 13)),
                                       ],
                                     ),
                                   )),
                             ],
                             const Divider(color: Colors.white12),
                             _row('ລວມກ່ອນສ່ວນຫຼຸດ',
-                                '${_bill!.subtotal.toStringAsFixed(0)} ກີບ'),
+                                '${_fmtNum(_bill!.subtotal)} ກີບ'),
                             if (_bill!.discount > 0)
                               _row('ສ່ວນຫຼຸດ',
-                                  '- ${_bill!.discount.toStringAsFixed(0)} ກີບ',
+                                  '- ${_fmtNum(_bill!.discount)} ກີບ',
                                   color: const Color(0xFF4CAF50)),
                             const Divider(color: Colors.white12),
                             _row('ລວມທັງໝົດ',
-                                '${_bill!.total.toStringAsFixed(0)} ກີບ',
+                                '${_fmtNum(_bill!.total)} ກີບ',
                                 isTotal: true),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
                         height: 48,
@@ -242,17 +318,16 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                           onPressed: _print,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFE94560),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                           ),
                           icon: const Icon(Icons.print, color: Colors.white),
-                          label: const Text('ພິມບິນ', style: TextStyle(color: Colors.white, fontSize: 15)),
+                          label: const Text('ພິມບິນ',
+                              style: TextStyle(color: Colors.white, fontSize: 15)),
                         ),
                       ),
-                      const SizedBox(height: 12),
                       const SizedBox(height: 24),
-
                       if (!_slipUploaded) ...[
-                        // Payment method selector
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -277,8 +352,6 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                           ),
                         ),
                         const SizedBox(height: 16),
-
-                        // Slip upload
                         GestureDetector(
                           onTap: _pickSlip,
                           child: Container(
@@ -311,7 +384,6 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                           ),
                         ),
                         const SizedBox(height: 16),
-
                         SizedBox(
                           width: double.infinity,
                           height: 52,
@@ -332,16 +404,16 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                                 : const Icon(Icons.send, color: Colors.white),
                             label: Text(
                               _uploading ? 'ກຳລັງສົ່ງ...' : 'ສົ່ງຫຼັກຖານການຊຳລະ',
-                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 16),
                             ),
                           ),
                         ),
                       ] else
-                        // Success state
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF4CAF50).withOpacity(0.1),
+                            color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFF4CAF50)),
                           ),
@@ -379,12 +451,15 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
                 style: TextStyle(
                     color: isTotal ? Colors.white : Colors.white54,
                     fontSize: isTotal ? 17 : 14,
-                    fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
+                    fontWeight:
+                        isTotal ? FontWeight.bold : FontWeight.normal)),
             Text(value,
                 style: TextStyle(
-                    color: color ?? (isTotal ? const Color(0xFFE94560) : Colors.white),
+                    color: color ??
+                        (isTotal ? const Color(0xFFE94560) : Colors.white),
                     fontSize: isTotal ? 20 : 14,
-                    fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
+                    fontWeight:
+                        isTotal ? FontWeight.bold : FontWeight.normal)),
           ],
         ),
       );
@@ -396,7 +471,7 @@ ${_bankQrUrl != null ? "<div style=\"text-align:center;margin:12px 0;\"><img src
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               color: _method == value
-                  ? const Color(0xFFE94560).withOpacity(0.15)
+                  ? const Color(0xFFE94560).withValues(alpha: 0.15)
                   : const Color(0xFF0F3460),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(

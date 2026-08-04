@@ -9,6 +9,18 @@ import 'dart:io';
 import '../services/api_service.dart';
 import '../models/models.dart';
 
+
+String _fmtNum(double v) {
+  final s = v.toStringAsFixed(0);
+  final result = StringBuffer();
+  final reversed = s.split('').reversed.toList();
+  for (int i = 0; i < reversed.length; i++) {
+    if (i > 0 && i % 3 == 0) result.write(',');
+    result.write(reversed[i]);
+  }
+  return result.toString().split('').reversed.join();
+}
+
 class PaymentScreen extends StatefulWidget {
   final String tableNumber;
   final int tableId;
@@ -124,7 +136,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
         await ApiService().verifyPayment(bill.id, 'approved',
             note: _payMethod == 'cash'
-                ? 'ເງິນສົດ · ຈ່າຍ ${_cashCtrl.text} · ທອນ ${_change.toStringAsFixed(0)}'
+                ? 'ເງິນສົດ · ຈ່າຍ ${_cashCtrl.text} · ທອນ ${_fmtNum(_change)}'
                 : _payMethod,
             paymentMethod: _payMethod);
       }
@@ -242,7 +254,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                             color: Colors.white, fontSize: 13)),
                                   ),
                                   Text(
-                                    '${(double.tryParse(item['line_total']?.toString() ?? '0') ?? 0).toStringAsFixed(0)} ກີບ',
+                                    '${_fmtNum((double.tryParse(item['line_total']?.toString() ?? '0') ?? 0))} ກີບ',
                                     style: const TextStyle(
                                         color: Colors.white70, fontSize: 13),
                                   ),
@@ -256,7 +268,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   style: TextStyle(color: Colors.white54, fontSize: 13)),
                               const Spacer(),
                               Text(
-                                '${(double.tryParse(order['total']?.toString() ?? '0') ?? 0).toStringAsFixed(0)} ກີບ',
+                                '${_fmtNum(double.tryParse(order['total']?.toString() ?? '0') ?? 0)} ກີບ',
                                 style: const TextStyle(
                                     color: Color(0xFFE94560),
                                     fontWeight: FontWeight.bold,
@@ -281,7 +293,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             style: TextStyle(color: Colors.white,
                                 fontSize: 18, fontWeight: FontWeight.bold)),
                         const Spacer(),
-                        Text('${_totalAmt.toStringAsFixed(0)} ກີບ',
+                        Text('${_fmtNum(_totalAmt)} ກີບ',
                             style: const TextStyle(
                                 color: Color(0xFFE94560),
                                 fontSize: 24,
@@ -392,7 +404,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           ),
                           const Spacer(),
                           Text(
-                            '${_change.abs().toStringAsFixed(0)} ກີບ',
+                            '${_fmtNum(_change.abs())} ກີບ',
                             style: TextStyle(
                                 color: _change >= 0
                                     ? const Color(0xFF4CAF50)
@@ -428,7 +440,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '${_totalAmt.toStringAsFixed(0)} ກີບ',
+                              '${_fmtNum(_totalAmt)} ກີບ',
                               style: const TextStyle(
                                   color: Color(0xFFE94560),
                                   fontSize: 20,
@@ -480,7 +492,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             const Text('POS Card',
                                 style: TextStyle(color: Colors.white,
                                     fontWeight: FontWeight.bold, fontSize: 14)),
-                            Text('${_totalAmt.toStringAsFixed(0)} ກີບ',
+                            Text('${_fmtNum(_totalAmt)} ກີບ',
                                 style: const TextStyle(
                                     color: Color(0xFFE94560),
                                     fontSize: 16,
@@ -640,7 +652,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           <tr>
             <td>${item['quantity']}x</td>
             <td>${item['name_lao'] ?? ''}</td>
-            <td style="text-align:right">${lineTotal.toStringAsFixed(0)}</td>
+            <td style="text-align:right">${_fmtNum(lineTotal)}</td>
           </tr>""");
       }
       itemRows.write("""
@@ -697,7 +709,7 @@ $logoHtml
   $itemRows
   <tr class="total-row">
     <td colspan="2">ລວມທັງໝົດ</td>
-    <td style="text-align:right">${_totalAmt.toStringAsFixed(0)}</td>
+    <td style="text-align:right">${_fmtNum(_totalAmt)}</td>
   </tr>
 </table>
 <div class="divider"></div>

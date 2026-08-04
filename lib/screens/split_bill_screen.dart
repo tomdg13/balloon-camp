@@ -7,6 +7,18 @@ import '../services/api_service.dart';
 import '../models/models.dart';
 import '../utils/print_helper.dart';
 
+
+String _fmtNum(double v) {
+  final s = v.toStringAsFixed(0);
+  final result = StringBuffer();
+  final reversed = s.split('').reversed.toList();
+  for (int i = 0; i < reversed.length; i++) {
+    if (i > 0 && i % 3 == 0) result.write(',');
+    result.write(reversed[i]);
+  }
+  return result.toString().split('').reversed.join();
+}
+
 class SplitBillScreen extends StatefulWidget {
   final int orderId;
   final String tableNumber;
@@ -25,11 +37,26 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   final _money = NumberFormat.decimalPattern();
   List<dynamic> _items = [];
   Map<int, int> _itemGroup = {};
+  int _totalGroups = 2; // start with 2 groups
   bool _loading = true;
   bool _splitting = false;
   List<dynamic>? _splitResult;
   String? _logoUrl;
   String? _bankQrUrl;
+
+  // Colors for groups (supports up to 8 groups)
+  static const List<Color> _groupColors = [
+    Color(0xFFE94560), // group 1 - red
+    Color(0xFF4CAF50), // group 2 - green
+    Color(0xFF2196F3), // group 3 - blue
+    Color(0xFFFF9800), // group 4 - orange
+    Color(0xFF9C27B0), // group 5 - purple
+    Color(0xFF00BCD4), // group 6 - cyan
+    Color(0xFFFFEB3B), // group 7 - yellow
+    Color(0xFFFF5722), // group 8 - deep orange
+  ];
+
+  Color _groupColor(int group) => _groupColors[(group - 1) % _groupColors.length];
 
   @override
   void initState() {
@@ -78,21 +105,45 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   List<dynamic> _groupItems(int group) =>
       _items.where((i) => _itemGroup[i['id']] == group).toList();
 
+  void _addGroup() {
+    setState(() => _totalGroups++);
+  }
+
+  void _removeGroup() {
+    if (_totalGroups <= 2) return;
+    // Move items from last group to group 1
+    setState(() {
+      for (final key in _itemGroup.keys.toList()) {
+        if (_itemGroup[key] == _totalGroups) {
+          _itemGroup[key] = 1;
+        }
+      }
+      _totalGroups--;
+    });
+  }
+
   Future<void> _splitBill() async {
-    final group1 = _items
-        .where((i) => _itemGroup[i['id']] == 1)
-        .map((i) => i['id'] as int)
-        .toList();
-    final group2 = _items
-        .where((i) => _itemGroup[i['id']] == 2)
-        .map((i) => i['id'] as int)
+    // Build groups list
+    final groups = <List<int>>[];
+    for (int g = 1; g <= _totalGroups; g++) {
+      final groupItems = _items
+          .where((i) => _itemGroup[i['id']] == g)
+          .map((i) => i['id'] as int)
+          .toList();
+      groups.add(groupItems);
+    }
+
+    // Check all groups have at least 1 item
+    final emptyGroups = groups.asMap().entries
+        .where((e) => e.value.isEmpty)
+        .map((e) => e.key + 1)
         .toList();
 
-    if (group1.isEmpty || group2.isEmpty) {
+    if (emptyGroups.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ກະລຸນາແບ່ງລາຍການໃຫ້ຄົບທັງ 2 ກຸ່ມ'),
-          backgroundColor: Color(0xFFE94560),
+        SnackBar(
+          content: Text('ກຸ່ມ ${emptyGroups.join(', ')} ຍັງບໍ່ມີລາຍການ'),
+          backgroundColor: const Color(0xFFE94560),
         ),
       );
       return;
@@ -100,9 +151,7 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
 
     setState(() => _splitting = true);
     try {
-      // Step 1: assign split_group to items
-      final result = await _api.splitBill(widget.orderId, [group1, group2]);
-      // Step 2: generate separate bills per group
+      final result = await _api.splitBill(widget.orderId, groups);
       await _api.generateSplitBills(widget.orderId);
       setState(() => _splitResult = result);
     } catch (e) {
@@ -142,43 +191,111 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   Widget _buildSplitter() {
     return Column(
       children: [
+        // Group headers with add/remove
         Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+          padding: const EdgeInsets.all(12),
+          child: Column(
             children: [
-              Expanded(child: _groupHeader(1, const Color(0xFFE94560))),
-              const SizedBox(width: 12),
-              Expanded(child: _groupHeader(2, const Color(0xFF4CAF50))),
+              // Group chips row
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (int g = 1; g <= _totalGroups; g++) ...[
+                      _groupChip(g),
+                      const SizedBox(width: 8),
+                    ],
+                    // Add group button
+                    GestureDetector(
+                      onTap: _addGroup,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16213E),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.add, color: Colors.white54, size: 16),
+                            SizedBox(width: 4),
+                            Text('ເພີ່ມກຸ່ມ',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_totalGroups > 2) ...[
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _removeGroup,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16213E),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: const Color(0xFFE94560).withValues(alpha: 0.5)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.remove,
+                                  color: Color(0xFFE94560), size: 16),
+                              SizedBox(width: 4),
+                              Text('ລຶບກຸ່ມ',
+                                  style: TextStyle(
+                                      color: Color(0xFFE94560),
+                                      fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),
+
+        // Items list
         Expanded(
           child: _items.isEmpty
               ? const Center(
                   child: Text('ບໍ່ມີລາຍການ',
                       style: TextStyle(color: Colors.white54)))
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   itemCount: _items.length,
                   itemBuilder: (_, i) => _buildItemRow(_items[i]),
                 ),
         ),
+
+        // Bottom totals + confirm
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           decoration: const BoxDecoration(
             color: Color(0xFF16213E),
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             children: [
-              Row(
-                children: [
-                  Expanded(child: _totalChip('ກຸ່ມ 1', _groupTotal(1), const Color(0xFFE94560))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _totalChip('ກຸ່ມ 2', _groupTotal(2), const Color(0xFF4CAF50))),
-                ],
+              // Group totals row
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (int g = 1; g <= _totalGroups; g++) ...[
+                      _totalChip(g),
+                      if (g < _totalGroups) const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -186,14 +303,19 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                   onPressed: !_splitting ? _splitBill : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE94560),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   icon: _splitting
-                      ? const SizedBox(width: 20, height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.call_split, color: Colors.white),
                   label: Text(
-                    _splitting ? 'ກຳລັງແຍກ...' : 'ຢືນຢັນແຍກບິນ',
+                    _splitting
+                        ? 'ກຳລັງແຍກ...'
+                        : 'ຢືນຢັນແຍກ $_totalGroups ກຸ່ມ',
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
@@ -205,19 +327,22 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     );
   }
 
-  Widget _groupHeader(int group, Color color) {
+  Widget _groupChip(int group) {
+    final color = _groupColor(group);
     final count = _groupItems(group).length;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
-          Text('ກຸ່ມ $group', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-          Text('$count ລາຍການ', style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 12)),
+          Text('ກຸ່ມ $group',
+              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+          Text('$count ລາຍການ',
+              style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 11)),
         ],
       ),
     );
@@ -226,69 +351,65 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
   Widget _buildItemRow(dynamic item) {
     final group = _itemGroup[item['id']] ?? 1;
     final lineTotal = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
-    final isGroup1 = group == 1;
+    final color = _groupColor(group);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: const Color(0xFF16213E),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isGroup1
-              ? const Color(0xFFE94560).withValues(alpha: 0.3)
-              : const Color(0xFF4CAF50).withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
+          // Group badge
           Container(
             width: 28, height: 28,
             decoration: BoxDecoration(
-              color: isGroup1
-                  ? const Color(0xFFE94560).withValues(alpha: 0.15)
-                  : const Color(0xFF4CAF50).withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Center(
               child: Text('$group',
                   style: TextStyle(
-                      color: isGroup1 ? const Color(0xFFE94560) : const Color(0xFF4CAF50),
-                      fontWeight: FontWeight.bold, fontSize: 13)),
+                      color: color, fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ),
           const SizedBox(width: 10),
+          // Item info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item['name_lao'] ?? '',
-                    style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
                 Text('${item['quantity']}x · ${_money.format(lineTotal)} ກີບ',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    style: const TextStyle(color: Colors.white54, fontSize: 11)),
               ],
             ),
           ),
+          // Group selector dropdown
           GestureDetector(
-            onTap: () => setState(() {
-              _itemGroup[item['id']] = isGroup1 ? 2 : 1;
-            }),
+            onTap: () => _showGroupPicker(item),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: isGroup1
-                    ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
-                    : const Color(0xFFE94560).withValues(alpha: 0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isGroup1 ? const Color(0xFF4CAF50) : const Color(0xFFE94560),
-                ),
+                border: Border.all(color: color.withValues(alpha: 0.5)),
               ),
-              child: Text(
-                isGroup1 ? '→ ກຸ່ມ 2' : '→ ກຸ່ມ 1',
-                style: TextStyle(
-                    color: isGroup1 ? const Color(0xFF4CAF50) : const Color(0xFFE94560),
-                    fontSize: 12, fontWeight: FontWeight.w600),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('ກຸ່ມ $group',
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, color: color, size: 16),
+                ],
               ),
             ),
           ),
@@ -297,9 +418,74 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     );
   }
 
-  Widget _totalChip(String label, double total, Color color) {
+  void _showGroupPicker(dynamic item) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16213E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('ເລືອກກຸ່ມສຳລັບ "${item['name_lao']}"',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (int g = 1; g <= _totalGroups; g++)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _itemGroup[item['id']] = g);
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _itemGroup[item['id']] == g
+                            ? _groupColor(g).withValues(alpha: 0.2)
+                            : const Color(0xFF0F3460),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _itemGroup[item['id']] == g
+                              ? _groupColor(g)
+                              : Colors.white12,
+                          width: _itemGroup[item['id']] == g ? 2 : 1,
+                        ),
+                      ),
+                      child: Text(
+                        'ກຸ່ມ $g',
+                        style: TextStyle(
+                          color: _groupColor(g),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _totalChip(int group) {
+    final color = _groupColor(group);
+    final total = _groupTotal(group);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
@@ -308,37 +494,39 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: color, fontSize: 12)),
-          const SizedBox(height: 2),
+          Text('ກຸ່ມ $group',
+              style: TextStyle(color: color, fontSize: 11)),
           Text('${_money.format(total)} ກີບ',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );
   }
 
   Widget _buildResult() {
-    final colors = [const Color(0xFFE94560), const Color(0xFF4CAF50)];
     final paidGroups = <int>{};
 
     return StatefulBuilder(
       builder: (context, setLocalState) => SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             const Icon(Icons.call_split, color: Color(0xFF4CAF50), size: 56),
             const SizedBox(height: 12),
             const Text('ແຍກບິນສຳເລັດ',
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-            const Text('ເລືອກກຸ່ມທີ່ຕ້ອງການຊຳລະ',
-                style: TextStyle(color: Colors.white54, fontSize: 13)),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold)),
+            Text('ແຍກເປັນ ${_splitResult!.length} ກຸ່ມ',
+                style: const TextStyle(color: Colors.white54, fontSize: 13)),
             const SizedBox(height: 24),
             ...(_splitResult ?? []).asMap().entries.map((entry) {
-              final i = entry.key;
               final s = entry.value;
               final group = s['group'] as int;
               final subtotal = (s['subtotal'] as num).toDouble();
-              final color = colors[i % colors.length];
+              final color = _groupColor(group);
               final isPaid = paidGroups.contains(group);
               final groupItems = _items
                   .where((item) => _itemGroup[item['id']] == group)
@@ -350,49 +538,66 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                   color: const Color(0xFF16213E),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isPaid ? const Color(0xFF4CAF50) : color.withValues(alpha: 0.4),
+                    color: isPaid
+                        ? const Color(0xFF4CAF50)
+                        : color.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Column(
                   children: [
+                    // Group header
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.1),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(13)),
                       ),
                       child: Row(
                         children: [
                           Icon(Icons.group, color: color, size: 18),
                           const SizedBox(width: 8),
                           Text('ກຸ່ມ $group',
-                              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+                              style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15)),
                           const Spacer(),
                           Text('${_money.format(subtotal)} ກີບ',
-                              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+                              style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16)),
                         ],
                       ),
                     ),
+                    // Items
                     ...groupItems.map((item) {
-                      final lineTotal = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
+                      final lineTotal = double.tryParse(
+                              item['line_total']?.toString() ?? '0') ??
+                          0;
                       return Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: Row(
                           children: [
                             Text('${item['quantity']}x',
-                                style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                                style: const TextStyle(
+                                    color: Colors.white54, fontSize: 13)),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(item['name_lao'] ?? '',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 13)),
                             ),
                             Text('${_money.format(lineTotal)} ກີບ',
-                                style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                                style: const TextStyle(
+                                    color: Colors.white54, fontSize: 13)),
                           ],
                         ),
                       );
                     }),
                     const SizedBox(height: 8),
+                    // Print + Pay buttons
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                       child: Row(
@@ -402,15 +607,22 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                               height: 46,
                               child: OutlinedButton.icon(
                                 onPressed: () async {
-                                  await _printGroupBill(group, subtotal, groupItems);
+                                  await _printGroupBill(
+                                      group, subtotal, groupItems);
                                 },
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFF2196F3)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  side: const BorderSide(
+                                      color: Color(0xFF2196F3)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(10)),
                                 ),
-                                icon: const Icon(Icons.print, color: Color(0xFF2196F3), size: 18),
+                                icon: const Icon(Icons.print,
+                                    color: Color(0xFF2196F3), size: 18),
                                 label: const Text('ພິມບິນ',
-                                    style: TextStyle(color: Color(0xFF2196F3), fontSize: 13)),
+                                    style: TextStyle(
+                                        color: Color(0xFF2196F3),
+                                        fontSize: 13)),
                               ),
                             ),
                           ),
@@ -421,18 +633,34 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                               child: ElevatedButton.icon(
                                 onPressed: isPaid
                                     ? null
-                                    : () => _payGroup(group, subtotal, groupItems,
-                                        () => setLocalState(() => paidGroups.add(group))),
+                                    : () => _payGroup(
+                                        group,
+                                        subtotal,
+                                        groupItems,
+                                        () => setLocalState(
+                                            () => paidGroups.add(group))),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: isPaid ? Colors.white12 : const Color(0xFF4CAF50),
+                                  backgroundColor: isPaid
+                                      ? Colors.white12
+                                      : const Color(0xFF4CAF50),
                                   disabledBackgroundColor: Colors.white12,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(10)),
                                 ),
-                                icon: Icon(isPaid ? Icons.check_circle : Icons.payments,
-                                    color: Colors.white, size: 18),
-                                label: Text(isPaid ? 'ຊຳລະແລ້ວ' : 'ຊຳລະ',
-                                    style: const TextStyle(color: Colors.white, fontSize: 13,
-                                        fontWeight: FontWeight.bold)),
+                                icon: Icon(
+                                    isPaid
+                                        ? Icons.check_circle
+                                        : Icons.payments,
+                                    color: Colors.white,
+                                    size: 18),
+                                label: Text(
+                                  isPaid ? 'ຊຳລະແລ້ວ' : 'ຊຳລະ',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
                           ),
@@ -451,10 +679,13 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
                 onPressed: () => Navigator.pop(context, true),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Colors.white24),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                icon: const Icon(Icons.arrow_back, color: Colors.white54, size: 18),
-                label: const Text('ກັບຄືນ', style: TextStyle(color: Colors.white54, fontSize: 14)),
+                icon: const Icon(Icons.arrow_back,
+                    color: Colors.white54, size: 18),
+                label: const Text('ກັບຄືນ',
+                    style: TextStyle(color: Colors.white54, fontSize: 14)),
               ),
             ),
           ],
@@ -463,10 +694,9 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
     );
   }
 
-  Future<void> _printGroupBill(int group, double subtotal, List<dynamic> items) async {
-    if (_logoUrl == null && _bankQrUrl == null) {
-      await _loadSettings();
-    }
+  Future<void> _printGroupBill(
+      int group, double subtotal, List<dynamic> items) async {
+    if (_logoUrl == null && _bankQrUrl == null) await _loadSettings();
 
     final now = DateTime.now();
     final dateStr =
@@ -475,12 +705,13 @@ class _SplitBillScreenState extends State<SplitBillScreen> {
 
     final itemRows = StringBuffer();
     for (final item in items) {
-      final lineTotal = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
+      final lineTotal =
+          double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
       itemRows.write("""
         <tr>
           <td>${item['quantity']}x</td>
           <td>${item['name_lao'] ?? ''}</td>
-          <td style="text-align:right">${lineTotal.toStringAsFixed(0)}</td>
+          <td style="text-align:right">${_fmtNum(lineTotal)}</td>
         </tr>""");
     }
 
@@ -532,7 +763,7 @@ $logoHtml
   $itemRows
   <tr class="total-row">
     <td colspan="2">ລວມທັງໝົດ</td>
-    <td style="text-align:right">${subtotal.toStringAsFixed(0)}</td>
+    <td style="text-align:right">${_fmtNum(subtotal)}</td>
   </tr>
 </table>
 <div class="divider"></div>
@@ -547,8 +778,8 @@ $qrHtml
     if (kIsWeb) openHtmlInNewTab(html);
   }
 
-  void _payGroup(int group, double subtotal, List<dynamic> items, VoidCallback onPaid) async {
-    // Get the split bill for this group
+  void _payGroup(int group, double subtotal, List<dynamic> items,
+      VoidCallback onPaid) async {
     int? billId;
     try {
       final bills = await _api.getBillsByOrderSplit(widget.orderId);
@@ -574,6 +805,7 @@ $qrHtml
         orderId: widget.orderId,
         billId: billId,
         bankQrUrl: _bankQrUrl,
+        groupColor: _groupColor(group),
         onPaid: onPaid,
       ),
     );
@@ -588,6 +820,7 @@ class _GroupPaySheet extends StatefulWidget {
   final int orderId;
   final int? billId;
   final String? bankQrUrl;
+  final Color groupColor;
   final VoidCallback onPaid;
 
   const _GroupPaySheet({
@@ -597,6 +830,7 @@ class _GroupPaySheet extends StatefulWidget {
     required this.orderId,
     this.billId,
     required this.bankQrUrl,
+    required this.groupColor,
     required this.onPaid,
   });
 
@@ -650,7 +884,7 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
       }
       await _api.verifyPayment(bill.id, 'approved',
           note: _method == 'cash'
-              ? 'ແຍກບິນ ກຸ່ມ ${widget.group} · ເງິນສົດ · ທອນ ${_change.toStringAsFixed(0)}'
+              ? 'ແຍກບິນ ກຸ່ມ ${widget.group} · ເງິນສົດ · ທອນ ${_fmtNum(_change)}'
               : 'ແຍກບິນ ກຸ່ມ ${widget.group} · $_method',
           paymentMethod: _method);
       if (mounted) {
@@ -666,7 +900,8 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ຊຳລະບໍ່ສຳເລັດ: $e'),
+          SnackBar(
+              content: Text('ຊຳລະບໍ່ສຳເລັດ: $e'),
               backgroundColor: const Color(0xFFE94560)),
         );
       }
@@ -693,13 +928,31 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              const Icon(Icons.payments, color: Color(0xFF4CAF50), size: 22),
-              const SizedBox(width: 8),
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: widget.groupColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text('${widget.group}',
+                      style: TextStyle(
+                          color: widget.groupColor,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 10),
               Text('ຊຳລະ ກຸ່ມ ${widget.group}',
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
               const Spacer(),
               Text('${_money.format(widget.subtotal)} ກີບ',
-                  style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      color: widget.groupColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
             ]),
             const SizedBox(height: 16),
             Row(children: [
@@ -724,8 +977,10 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
                   filled: true,
                   fillColor: const Color(0xFF0F3460),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
                 ),
               ),
               const SizedBox(height: 8),
@@ -734,16 +989,22 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
                     .where((v) => v >= widget.subtotal)
                     .take(4)
                     .map((v) => GestureDetector(
-                          onTap: () { _cashCtrl.text = v.toString(); _calcChange(); },
+                          onTap: () {
+                            _cashCtrl.text = v.toString();
+                            _calcChange();
+                          },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: const Color(0xFF0F3460),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.white12),
                             ),
-                            child: Text('${(v / 1000).toStringAsFixed(0)}K',
-                                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                            child: Text(
+                                '${(v / 1000).toStringAsFixed(0)}K',
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 12)),
                           ),
                         )),
               ]),
@@ -763,13 +1024,18 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
                 child: Row(children: [
                   Text(_change >= 0 ? 'ເງິນທອນ' : 'ຍັງຂາດ',
                       style: TextStyle(
-                          color: _change >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFE94560),
+                          color: _change >= 0
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFFE94560),
                           fontWeight: FontWeight.bold)),
                   const Spacer(),
-                  Text('${_change.abs().toStringAsFixed(0)} ກີບ',
+                  Text('${_fmtNum(_change.abs())} ກີບ',
                       style: TextStyle(
-                          color: _change >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFE94560),
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                          color: _change >= 0
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFFE94560),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
                 ]),
               ),
             ],
@@ -777,26 +1043,39 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12)),
                 child: Column(children: [
-                  Image.network(widget.bankQrUrl!, width: 180, height: 180, fit: BoxFit.contain),
+                  Image.network(widget.bankQrUrl!,
+                      width: 180, height: 180, fit: BoxFit.contain),
                   const SizedBox(height: 6),
                   Text('${_money.format(widget.subtotal)} ກີບ',
-                      style: const TextStyle(color: Color(0xFFE94560), fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: const TextStyle(
+                          color: Color(0xFFE94560),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                   const Text('PromptPay / BCEL / LDB',
-                      style: TextStyle(color: Colors.black54, fontSize: 11)),
+                      style:
+                          TextStyle(color: Colors.black54, fontSize: 11)),
                 ]),
               ),
             ],
             if (_method == 'pos') ...[
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: const Color(0xFF0F3460), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF0F3460),
+                    borderRadius: BorderRadius.circular(12)),
                 child: Row(children: [
-                  const Icon(Icons.credit_card, color: Color(0xFF2196F3), size: 28),
+                  const Icon(Icons.credit_card,
+                      color: Color(0xFF2196F3), size: 28),
                   const SizedBox(width: 12),
                   Text('${_money.format(widget.subtotal)} ກີບ',
-                      style: const TextStyle(color: Color(0xFFE94560), fontSize: 18, fontWeight: FontWeight.bold)),
+                      style: const TextStyle(
+                          color: Color(0xFFE94560),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
                 ]),
               ),
             ],
@@ -809,15 +1088,23 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4CAF50),
                   disabledBackgroundColor: Colors.white12,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: _paying
-                    ? const SizedBox(width: 20, height: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.check_circle, color: Colors.white),
                 label: Text(
-                  _paying ? 'ກຳລັງດຳເນີນການ...' : 'ຢືນຢັນຊຳລະ ກຸ່ມ ${widget.group}',
-                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  _paying
+                      ? 'ກຳລັງດຳເນີນການ...'
+                      : 'ຢືນຢັນຊຳລະ ກຸ່ມ ${widget.group}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -839,14 +1126,22 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
                   : const Color(0xFF0F3460),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: _method == method ? const Color(0xFFE94560) : Colors.transparent),
+                  color: _method == method
+                      ? const Color(0xFFE94560)
+                      : Colors.transparent),
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, color: _method == method ? const Color(0xFFE94560) : Colors.white54, size: 20),
+              Icon(icon,
+                  color: _method == method
+                      ? const Color(0xFFE94560)
+                      : Colors.white54,
+                  size: 20),
               const SizedBox(height: 3),
               Text(label,
                   style: TextStyle(
-                      color: _method == method ? const Color(0xFFE94560) : Colors.white54,
+                      color: _method == method
+                          ? const Color(0xFFE94560)
+                          : Colors.white54,
                       fontSize: 11)),
             ]),
           ),

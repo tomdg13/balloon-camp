@@ -218,9 +218,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _openBill(Map tx) {
     final orderId = tx['order_id'] as int?;
     if (orderId == null) return;
+    final billId = tx['bill_id'] as int?;
+    final splitGroup = tx['split_group'] as int?;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => BillScreen(orderId: orderId)),
+      MaterialPageRoute(
+        builder: (_) => BillScreen(
+          orderId: orderId,
+          billId: billId,
+          splitGroup: splitGroup,
+        ),
+      ),
     );
   }
 
