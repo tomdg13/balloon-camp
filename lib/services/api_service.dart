@@ -366,4 +366,43 @@ class ApiService {
     final res = await _dio.get('/api/bills/by-order-split/$orderId');
     return List<dynamic>.from(res.data['data']);
   }
+
+  Future<String> uploadStockImage(int itemId, File imageFile) async {
+    final form = FormData.fromMap({
+      'image': await MultipartFile.fromFile(imageFile.path, filename: 'stock.jpg'),
+    });
+    final res = await _dio.post('/api/stock/$itemId/image', data: form);
+    return res.data['image_url'];
+  }
+
+  Future<String> uploadStockImageBytes(int itemId, Uint8List bytes, String filename) async {
+    final form = FormData.fromMap({
+      'image': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _dio.post('/api/stock/$itemId/image', data: form);
+    return res.data['image_url'];
+  }
+
+
+  Future<List<dynamic>> getShoppingList() async {
+    final res = await _dio.get('/api/shopping-list');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> addToShoppingList({required int stockItemId, required double quantityNeeded, String? note}) async {
+    await _dio.post('/api/shopping-list', data: {
+      'stock_item_id': stockItemId,
+      'quantity_needed': quantityNeeded,
+      'note': note,
+    });
+  }
+
+  Future<void> markShoppingItemBought(int id) async {
+    await _dio.patch('/api/shopping-list/$id/buy');
+  }
+
+  Future<void> deleteShoppingItem(int id) async {
+    await _dio.delete('/api/shopping-list/$id');
+  }
+
 }
