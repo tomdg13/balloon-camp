@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
@@ -97,7 +98,7 @@ class _CartScreenState extends State<CartScreen> {
                                           fontSize: 15)),
                                   if (c.menuItem.price > 0)
                                     Text(
-                                      '${c.menuItem.price.toStringAsFixed(0)} ກີບ x ${c.quantity} = ${c.total.toStringAsFixed(0)} ກີບ',
+                                      '${NumberFormat.decimalPattern().format(c.menuItem.price)} ກີບ x ${c.quantity} = ${NumberFormat.decimalPattern().format(c.total)} ກີບ',
                                       style: const TextStyle(
                                           color: Colors.white54, fontSize: 13),
                                     ),
@@ -168,7 +169,7 @@ class _CartScreenState extends State<CartScreen> {
                           const Text('ລວມທັງໝົດ',
                               style: TextStyle(color: Colors.white70, fontSize: 16)),
                           Text(
-                            '${provider.cartTotal.toStringAsFixed(0)} ກີບ',
+                            '${NumberFormat.decimalPattern().format(provider.cartTotal)} ກີບ',
                             style: const TextStyle(
                                 color: Color(0xFFE94560),
                                 fontSize: 22,

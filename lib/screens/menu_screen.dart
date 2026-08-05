@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -336,7 +337,7 @@ class _MenuScreenState extends State<MenuScreen> {
                 children: [
                   Text('${provider.cartCount} ລາຍການ',
                       style: const TextStyle(color: Colors.white, fontSize: 11)),
-                  Text('${provider.cartTotal.toStringAsFixed(0)} ກີບ',
+                  Text('${NumberFormat.decimalPattern().format(provider.cartTotal)} ກີບ',
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -440,7 +441,7 @@ class _MenuCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                   if (item.price > 0)
-                    Text('${item.price.toStringAsFixed(0)}',
+                    Text('${NumberFormat.decimalPattern().format(item.price)}',
                         style: const TextStyle(
                             color: Color(0xFFE94560), fontSize: 10,
                             fontWeight: FontWeight.bold)),
@@ -729,7 +730,7 @@ class _PreviousOrdersPanelState extends State<_PreviousOrdersPanel> {
                                       if (item['line_total'] != null &&
                                           double.tryParse(item['line_total'].toString())! > 0)
                                         Text(
-                                          '${double.tryParse(item['line_total'].toString())!.toStringAsFixed(0)}',
+                                          '${NumberFormat.decimalPattern().format(double.tryParse(item['line_total'].toString()) ?? 0)}',
                                           style: const TextStyle(
                                               color: Colors.white38, fontSize: 10),
                                         ),
@@ -744,7 +745,7 @@ class _PreviousOrdersPanelState extends State<_PreviousOrdersPanel> {
                                     const Text('ລວມ: ',
                                         style: TextStyle(color: Colors.white38, fontSize: 11)),
                                     Text(
-                                      '${double.tryParse(order['total'].toString())!.toStringAsFixed(0)} ກີບ',
+                                      '${NumberFormat.decimalPattern().format(double.tryParse(order['total'].toString()) ?? 0)} ກີບ',
                                       style: const TextStyle(
                                           color: Color(0xFFE94560),
                                           fontSize: 12,

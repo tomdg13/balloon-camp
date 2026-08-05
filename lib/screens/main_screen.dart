@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -660,7 +661,7 @@ class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
                                   if (o.totalAmount != null && o.totalAmount! > 0) ...[
                                     const Spacer(),
                                     Text(
-                                      '${o.totalAmount!.toStringAsFixed(0)} ກີບ',
+                                      '${NumberFormat.decimalPattern().format(o.totalAmount!)} ກີບ',
                                       style: const TextStyle(
                                           color: Color(0xFFE94560),
                                           fontSize: 12,

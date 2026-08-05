@@ -1,4 +1,6 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -85,7 +87,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     final nameEnCtrl = TextEditingController(text: item?.nameEn ?? '');
     final priceCtrl = TextEditingController(
         text: item?.price != null && item!.price > 0
-            ? item.price.toStringAsFixed(0) : '');
+            ? NumberFormat.decimalPattern().format(item.price) : '');
     int categoryId = _selectedCategoryId ?? _categories.first.id;
     bool isAvailable = item?.isAvailable ?? true;
 
@@ -104,7 +106,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
               _dlgField('ຊື່ (ອັງກິດ)', nameEnCtrl, Icons.translate),
               const SizedBox(height: 12),
               _dlgField('ລາຄາ (ກີບ)', priceCtrl, Icons.attach_money,
-                  keyboardType: TextInputType.number),
+                  keyboardType: TextInputType.number, useThousands: true),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: categoryId,
@@ -161,7 +163,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                       categoryId: categoryId,
                       nameLao: nameCtrl.text.trim(),
                       nameEn: nameEnCtrl.text.trim(),
-                      price: double.tryParse(priceCtrl.text) ?? 0,
+                      price: double.tryParse(priceCtrl.text.replaceAll(',', '')) ?? 0,
                     );
                     _showSuccess('ເພີ່ມເມນູສຳເລັດ');
                   }
@@ -318,8 +320,11 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
       );
 
   Widget _dlgField(String label, TextEditingController ctrl, IconData icon,
-          {TextInputType? keyboardType}) =>
-      TextField(controller: ctrl, keyboardType: keyboardType,
+          {TextInputType? keyboardType, bool useThousands = false}) =>
+      TextField(
+          controller: ctrl,
+          keyboardType: keyboardType,
+          inputFormatters: useThousands ? [FilteringTextInputFormatter.digitsOnly, _ThousandsFormatter()] : null,
           style: const TextStyle(color: Colors.white),
           decoration: _inputDeco(label, icon));
 
@@ -591,7 +596,7 @@ class _MenuCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     item.price > 0
-                        ? '${item.price.toStringAsFixed(0)} ກີບ'
+                        ? '${NumberFormat.decimalPattern().format(item.price)} ກີບ'
                         : 'ຍັງບໍ່ກຳນົດລາຄາ',
                     style: TextStyle(
                         color: item.price > 0
@@ -676,4 +681,18 @@ class _MenuCard extends StatelessWidget {
               style: TextStyle(color: Colors.white.withValues(alpha: 0.2), fontSize: 11)),
         ]),
       );
+}
+class _ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+    final digits = newValue.text.replaceAll(',', '');
+    if (digits.isEmpty || double.tryParse(digits) == null) return oldValue;
+    final formatted = NumberFormat.decimalPattern().format(int.parse(digits));
+    return newValue.copyWith(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }

@@ -859,7 +859,7 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
   }
 
   void _calcChange() {
-    final paid = double.tryParse(_cashCtrl.text) ?? 0;
+    final paid = double.tryParse(_cashCtrl.text.replaceAll(',', '')) ?? 0;
     setState(() => _change = paid - widget.subtotal);
   }
 
@@ -967,7 +967,7 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
               TextField(
                 controller: _cashCtrl,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, _ThousandsFormatter()],
                 style: const TextStyle(color: Colors.white, fontSize: 18),
                 decoration: InputDecoration(
                   hintText: 'ຈຳນວນທີ່ຈ່າຍ',
@@ -1147,4 +1147,19 @@ class _GroupPaySheetState extends State<_GroupPaySheet> {
           ),
         ),
       );
+}
+
+class _ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+    final digits = newValue.text.replaceAll(',', '');
+    if (digits.isEmpty || double.tryParse(digits) == null) return oldValue;
+    final formatted = NumberFormat.decimalPattern().format(int.parse(digits));
+    return newValue.copyWith(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }
