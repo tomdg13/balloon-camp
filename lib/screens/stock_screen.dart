@@ -135,7 +135,7 @@ class _StockScreenState extends State<StockScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: \$e'), backgroundColor: const Color(0xFFE94560)));
+            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
       }
     }
   }
@@ -147,7 +147,16 @@ class _StockScreenState extends State<StockScreen> {
     final qtyCtrl = TextEditingController(text: item?['quantity']?.toString() ?? '0');
     final thresholdCtrl = TextEditingController(text: item?['low_stock_threshold']?.toString() ?? '1');
     String category = item?['category'] ?? _selectedCategory;
-    DateTime? expiryDate = item?['expiry_date'] != null ? DateTime.tryParse(item['expiry_date'].toString()) : null;
+    final expiryDaysCtrl = TextEditingController();
+    if (item?['expiry_date'] != null) {
+      final existingExpiry = DateTime.tryParse(item['expiry_date'].toString());
+      if (existingExpiry != null) {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final daysLeft = existingExpiry.difference(todayDate).inDays;
+        expiryDaysCtrl.text = daysLeft.toString();
+      }
+    }
 
     final result = await showDialog<bool>(
       context: context,
@@ -214,28 +223,15 @@ class _StockScreenState extends State<StockScreen> {
                   decoration: const InputDecoration(labelText: 'Low stock alert below', labelStyle: TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(height: 10),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: dCtx,
-                      initialDate: expiryDate ?? DateTime.now(),
-                      firstDate: DateTime(2024),
-                      lastDate: DateTime(2035),
-                    );
-                    if (picked != null) setDlg(() => expiryDate = picked);
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Expiry date',
-                      labelStyle: TextStyle(color: Colors.white54),
-                      suffixIcon: Icon(Icons.calendar_today, color: Colors.white54, size: 18),
-                    ),
-                    child: Text(
-                      expiryDate != null
-                          ? '\${expiryDate!.year}-\${expiryDate!.month.toString().padLeft(2, "0")}-\${expiryDate!.day.toString().padLeft(2, "0")}'
-                          : 'Auto-calculated',
-                      style: const TextStyle(color: Colors.white),
-                    ),
+                TextField(
+                  controller: expiryDaysCtrl,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'ຈຳນວນມື້ກ່ອນໝົດອາຍຸ',
+                    labelStyle: TextStyle(color: Colors.white54),
+                    hintText: 'ຫວ່າງໄວ້ = ຄິດໄລ່ອັດຕະໂນມັດ',
+                    hintStyle: TextStyle(color: Colors.white24),
                   ),
                 ),
               ],
@@ -264,9 +260,13 @@ class _StockScreenState extends State<StockScreen> {
       'unit': unitCtrl.text.trim(),
       'quantity': double.tryParse(qtyCtrl.text) ?? 0,
       'low_stock_threshold': double.tryParse(thresholdCtrl.text) ?? 1,
-      if (expiryDate != null)
-        'expiry_date': '\${expiryDate!.year}-\${expiryDate!.month.toString().padLeft(2, "0")}-\${expiryDate!.day.toString().padLeft(2, "0")}',
     };
+    final daysInput = int.tryParse(expiryDaysCtrl.text.trim());
+    if (daysInput != null) {
+      final target = DateTime.now().add(Duration(days: daysInput));
+      data['expiry_date'] =
+          '${target.year}-${target.month.toString().padLeft(2, "0")}-${target.day.toString().padLeft(2, "0")}';
+    }
 
     try {
       if (item == null) {
@@ -278,7 +278,7 @@ class _StockScreenState extends State<StockScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: \$e'), backgroundColor: const Color(0xFFE94560)));
+            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
       }
     }
   }
@@ -303,7 +303,7 @@ class _StockScreenState extends State<StockScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: \$e'), backgroundColor: const Color(0xFFE94560)));
+            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
       }
     }
   }
@@ -326,7 +326,7 @@ class _StockScreenState extends State<StockScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(color: const Color(0xFFE94560), borderRadius: BorderRadius.circular(12)),
-                  child: Text('\$lowCount low', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: Text('$lowCount ໃກ້ໝົດ', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
               const Spacer(),
               ElevatedButton.icon(
@@ -456,7 +456,7 @@ class _StockScreenState extends State<StockScreen> {
                                             style: TextStyle(color: isLow ? const Color(0xFFE94560) : Colors.white54, fontSize: 11)),
                                         if (days != null)
                                           Text(
-                                            days < 0 ? 'Expired' : (days <= 1 ? 'Expires soon' : 'Exp \$days d'),
+                                            days < 0 ? 'Expired' : (days <= 1 ? 'Expires soon' : 'Exp $days d'),
                                             style: TextStyle(
                                                 color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38,
                                                 fontSize: 10),

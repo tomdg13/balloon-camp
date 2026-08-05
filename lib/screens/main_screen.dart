@@ -299,7 +299,7 @@ class _TablesPageState extends State<_TablesPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('ໂຕະ \${t.tableNumber}',
+            Text('ໂຕະ ${t.tableNumber}',
                 style: const TextStyle(
                     color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),

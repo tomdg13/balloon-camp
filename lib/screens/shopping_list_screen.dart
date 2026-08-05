@@ -10,6 +10,8 @@ class ShoppingListScreen extends StatefulWidget {
 
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
   List<dynamic> _pending = [];
+  List<dynamic> _history = [];
+  bool _showHistory = false;
   List<dynamic> _stockItems = [];
   bool _loading = true;
   String _selectedCategory = 'meat';
@@ -36,17 +38,29 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       final results = await Future.wait([
         ApiService().getShoppingList(),
         ApiService().getStockItems(),
+        ApiService().getShoppingListHistory(),
       ]);
       if (mounted) {
         setState(() {
           _pending = results[0];
           _stockItems = results[1];
+          _history = results[2];
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  int? _daysUntilExpiry(dynamic item) {
+    final expiryStr = item['expiry_date'];
+    if (expiryStr == null) return null;
+    final expiry = DateTime.tryParse(expiryStr.toString());
+    if (expiry == null) return null;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    return expiry.difference(todayDate).inDays;
   }
 
   List<dynamic> get _currentItems =>
@@ -214,6 +228,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                               final item = _currentItems[i];
                               final itemId = item['id'] as int;
                               final inCart = _cart[itemId];
+                              final days = _daysUntilExpiry(item);
                               return GestureDetector(
                                 onTap: () => _tapAdd(item),
                                 child: Container(
@@ -256,9 +271,19 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                       ),
                                       Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                        child: Text('${item['name_lao']}',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('${item['name_lao']}',
+                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            if (days != null)
+                                              Text(
+                                                days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
+                                                style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -279,20 +304,47 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           padding: const EdgeInsets.all(12),
                           child: Row(
                             children: [
-                              const Icon(Icons.list_alt, color: Color(0xFFE94560), size: 18),
-                              const SizedBox(width: 8),
-                              const Text('ລໍຖ້າຊື້', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _showHistory = false),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: !_showHistory ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text('ລໍຖ້າຊື້', textAlign: TextAlign.center,
+                                        style: TextStyle(color: !_showHistory ? const Color(0xFFE94560) : Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _showHistory = true),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: _showHistory ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text('ປະຫວັດ', textAlign: TextAlign.center,
+                                        style: TextStyle(color: _showHistory ? const Color(0xFFE94560) : Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         Expanded(
                           child: ListView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
-                            itemCount: _pending.length,
+                            itemCount: _showHistory ? _history.length : _pending.length,
                             itemBuilder: (_, i) {
-                              final entry = _pending[i];
+                              final entry = _showHistory ? _history[i] : _pending[i];
                               final id = entry['id'] as int;
                               final isBuying = _buying.contains(id);
+                              final days = _daysUntilExpiry(entry);
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(10),
@@ -305,33 +357,47 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                   children: [
                                     Text('${entry['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                                     Text('${entry['quantity_needed']} ${entry['unit']}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                    if (!_showHistory && days != null)
+                                      Text(
+                                        days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້ໝົດອາຍຸ',
+                                        style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                                      ),
+                                    if (_showHistory && entry['bought_at'] != null)
+                                      Builder(builder: (_) {
+                                        final t = DateTime.tryParse(entry['bought_at'].toString());
+                                        final label = t == null
+                                            ? ''
+                                            : 'ຊື້ວັນທີ ${t.day.toString().padLeft(2, "0")}/${t.month.toString().padLeft(2, "0")}/${t.year}';
+                                        return Text(label, style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 10));
+                                      }),
                                     const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 30,
-                                            child: ElevatedButton(
-                                              onPressed: isBuying ? null : () => _markBought(entry),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF4CAF50),
-                                                padding: EdgeInsets.zero,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    if (!_showHistory)
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: SizedBox(
+                                              height: 30,
+                                              child: ElevatedButton(
+                                                onPressed: isBuying ? null : () => _markBought(entry),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF4CAF50),
+                                                  padding: EdgeInsets.zero,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                child: isBuying
+                                                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                                    : const Text('ຊື້ແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 12)),
                                               ),
-                                              child: isBuying
-                                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                                  : const Text('ຊື້ແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 12)),
                                             ),
                                           ),
-                                        ),
-                                        IconButton(
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          icon: const Icon(Icons.close, color: Colors.white38, size: 16),
-                                          onPressed: () => _removeItem(entry),
-                                        ),
-                                      ],
-                                    ),
+                                          IconButton(
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            icon: const Icon(Icons.close, color: Colors.white38, size: 16),
+                                            onPressed: () => _removeItem(entry),
+                                          ),
+                                        ],
+                                      ),
                                   ],
                                 ),
                               );

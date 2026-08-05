@@ -405,4 +405,10 @@ class ApiService {
     await _dio.delete('/api/shopping-list/$id');
   }
 
+
+  Future<List<dynamic>> getShoppingListHistory() async {
+    final res = await _dio.get('/api/shopping-list/history');
+    return List<dynamic>.from(res.data['data']);
+  }
+
 }
