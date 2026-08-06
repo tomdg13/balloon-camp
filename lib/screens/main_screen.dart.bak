@@ -17,7 +17,6 @@ import 'waiter_calls_screen.dart';
 import 'stock_screen.dart';
 import 'shopping_list_screen.dart';
 import 'table_operations_screen.dart';
-import 'customer_screen.dart';
 
 // ── Page index constants ──────────────────────────────────────
 const int kPageTables  = 0;
@@ -31,7 +30,6 @@ const int kPageWaiterCalls = 7;
 const int kPageTableOps = 8;
 const int kPageStock = 9;
 const int kPageShoppingList = 10;
-const int kPageCustomers = 11;
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -63,7 +61,6 @@ class _MainScreenState extends State<MainScreen> {
       const TableOperationsScreen(),
       const StockScreen(),
       const ShoppingListScreen(),
-      const CustomerScreen(),
     ];
 
     if (isWeb) {
@@ -179,39 +176,31 @@ class _SideNav extends StatelessWidget {
               ],
             ),
           ),
-                  const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
           // Nav items
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                          _item(context, Icons.table_restaurant, 'ເລືອກໂຕະ', kPageTables),
-                  if (isAdmin || isKitchen)
-                    _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
-                  _item(context, Icons.notifications_active, 'ອາຫານພ້ອມ', kPageWaiterCalls),
+          _item(context, Icons.table_restaurant, 'ເລືອກໂຕະ', kPageTables),
+          if (isAdmin || isKitchen)
+            _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
+          _item(context, Icons.notifications_active, 'ອາຫານພ້ອມ', kPageWaiterCalls),
 
-                  if (isAdmin) ...[
-                    const Padding(
+          if (isAdmin) ...[
+            const Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 6),
               child: Text('ADMIN',
                   style: TextStyle(color: Colors.white24, fontSize: 11, letterSpacing: 2)),
             ),
-                    _item(context, Icons.manage_accounts, 'ຈັດການພະນັກງານ', kPageStaff),
-                    _item(context, Icons.table_bar, 'ຈັດການໂຕະ', kPageTableMgmt),
-                    _item(context, Icons.restaurant_menu, 'ຈັດການເມນູ', kPageMenuMgmt),
-                    _item(context, Icons.settings, 'ຕັ້ງຄ່າຮ້ານ', kPageSettings),
-                    _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock),
-                    _item(context, Icons.shopping_cart, 'ລາຍການອອກຕະຫຼາດ', kPageShoppingList),
-                    _item(context, Icons.bar_chart, 'ລາຍງານ', kPageReports),
-                    _item(context, Icons.swap_horiz, 'ຈັດການໂຕະລູກຄ້າ', kPageTableOps),
-                    _item(context, Icons.people, 'ຈັດການລູກຄ້າ', kPageCustomers),
+            _item(context, Icons.manage_accounts, 'ຈັດການພະນັກງານ', kPageStaff),
+            _item(context, Icons.table_bar, 'ຈັດການໂຕະ', kPageTableMgmt),
+            _item(context, Icons.restaurant_menu, 'ຈັດການເມນູ', kPageMenuMgmt),
+            _item(context, Icons.settings, 'ຕັ້ງຄ່າຮ້ານ', kPageSettings),
+            _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock),
+            _item(context, Icons.shopping_cart, 'ລາຍການອອກຕະຫຼາດ', kPageShoppingList),
+            _item(context, Icons.bar_chart, 'ລາຍງານ', kPageReports),
+            _item(context, Icons.swap_horiz, 'ຈັດການໂຕະລູກຄ້າ', kPageTableOps),
           ],
-                ],
-              ),
-            ),
-          ),
+
+          const Spacer(),
           const Divider(color: Colors.white12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -340,7 +329,7 @@ class _TablesPageState extends State<_TablesPage> {
                     MaterialPageRoute(builder: (_) => QrScreen(table: t)));
               },
             ),
-                    const SizedBox(height: 8),
+            const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54)),
@@ -380,6 +369,7 @@ class _TablesPageState extends State<_TablesPage> {
             children: [
               const Text('ເລືອກໂຕະ',
                   style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+              const Spacer(),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white),
                 onPressed: _load,
@@ -579,6 +569,7 @@ class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
               const Text('ອໍເດີລ່າສຸດ',
                   style: TextStyle(
                       color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+              const Spacer(),
               GestureDetector(
                 onTap: _load,
                 child: const Icon(Icons.refresh, color: Colors.white38, size: 18),
@@ -630,6 +621,7 @@ class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
                                             fontWeight: FontWeight.bold,
                                             fontSize: 12)),
                                   ),
+                                  const Spacer(),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 3),
@@ -644,13 +636,14 @@ class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
                                             fontWeight: FontWeight.w600)),
                                   ),
                                 ]),
-                                        const SizedBox(height: 8),
+                                const SizedBox(height: 8),
                                 Row(children: [
                                   const Icon(Icons.person, color: Colors.white38, size: 13),
                                   const SizedBox(width: 4),
                                   Text(o.staffName,
                                       style: const TextStyle(
                                           color: Colors.white54, fontSize: 12)),
+                                  const Spacer(),
                                   const Icon(Icons.access_time,
                                       color: Colors.white38, size: 13),
                                   const SizedBox(width: 4),
@@ -666,6 +659,7 @@ class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
                                       style: const TextStyle(
                                           color: Colors.white54, fontSize: 12)),
                                   if (o.totalAmount != null && o.totalAmount! > 0) ...[
+                                    const Spacer(),
                                     Text(
                                       '${NumberFormat.decimalPattern().format(o.totalAmount!)} ກີບ',
                                       style: const TextStyle(
