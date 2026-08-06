@@ -12,6 +12,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   List<dynamic> _pending = [];
   List<dynamic> _history = [];
   bool _showHistory = false;
+  final Set<int> _expandedGroups = {};
   List<dynamic> _stockItems = [];
   bool _loading = true;
   String _selectedCategory = 'meat';
@@ -81,10 +82,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
           'expiry_date': entry['expiry_date'],
           'bought_at': entry['bought_at'],
           'purchase_count': 1,
+          'entries': [entry],
         };
       } else {
         final g = groups[stockId]!;
         g['purchase_count'] = (g['purchase_count'] as int) + 1;
+        (g['entries'] as List).add(entry);
         // Keep the soonest (earliest) expiry across purchases
         final currentExpiry = DateTime.tryParse(g['expiry_date']?.toString() ?? '');
         final newExpiry = DateTime.tryParse(entry['expiry_date']?.toString() ?? '');
@@ -406,65 +409,135 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           ),
                         ),
                         Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(8),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                headingRowColor: WidgetStateProperty.all(const Color(0xFF0F3460)),
-                                headingTextStyle: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
-                                dataTextStyle: const TextStyle(color: Colors.white, fontSize: 12),
-                                columnSpacing: 16,
-                                columns: [
-                                  const DataColumn(label: Text('ລາຍການ')),
-                                  const DataColumn(label: Text('ຈຳນວນ')),
-                                  if (_showHistory) const DataColumn(label: Text('ວັນຊື້')),
-                                  const DataColumn(label: Text('ໝົດອາຍຸ')),
-                                  const DataColumn(label: Text('')),
-                                ],
-                                rows: (_showHistory ? _groupedHistory : _pending).map<DataRow>((entry) {
-                                  final id = entry['id'] as int?;
-                                  final isBuying = id != null && _buying.contains(id);
-                                  final days = _daysUntilExpiry(entry);
-
-                                  String boughtText = '';
-                                  if (_showHistory && entry['bought_at'] != null) {
-                                    final t = DateTime.tryParse(entry['bought_at'].toString());
-                                    if (t != null) {
-                                      boughtText = '${t.day.toString().padLeft(2, "0")}/${t.month.toString().padLeft(2, "0")}/${t.year}';
-                                    }
-                                  }
-
-                                  String expiryText = '';
-                                  Color expiryColor = Colors.white38;
-                                  if (days != null) {
-                                    expiryText = days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້';
-                                    expiryColor = (days <= 1) ? const Color(0xFFE94560) : Colors.white38;
-                                  }
-
-                                  return DataRow(cells: [
-                                    DataCell(Text('${entry['name_lao']}')),
-                                    DataCell(
-                                      _showHistory && (entry['purchase_count'] ?? 1) > 1
-                                          ? Column(
+                          child: _showHistory
+                              ? ListView.builder(
+                                  padding: const EdgeInsets.all(8),
+                                  itemCount: _groupedHistory.length,
+                                  itemBuilder: (_, i) {
+                                    final group = _groupedHistory[i];
+                                    final stockId = group['stock_item_id'] as int;
+                                    final expanded = _expandedGroups.contains(stockId);
+                                    final days = _daysUntilExpiry(group);
+                                    final entries = group['entries'] as List;
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F3460),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          InkWell(
+                                            onTap: () => setState(() {
+                                              if (expanded) {
+                                                _expandedGroups.remove(stockId);
+                                              } else {
+                                                _expandedGroups.add(stockId);
+                                              }
+                                            }),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(10),
+                                              child: Row(
+                                                children: [
+                                                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: Colors.white54, size: 18),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text('${group['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                                        Text('${group['quantity_needed']} ${group['unit']} · ${group['purchase_count']} ຄັ້ງ',
+                                                            style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                                        if (days != null)
+                                                          Text(
+                                                            days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
+                                                            style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  SizedBox(
+                                                    height: 28,
+                                                    child: ElevatedButton(
+                                                      onPressed: () => _markDepleted(group),
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: const Color(0xFFE94560),
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                      ),
+                                                      child: const Text('ໝົດແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          if (expanded)
+                                            Padding(
+                                              padding: const EdgeInsets.fromLTRB(34, 0, 10, 8),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: entries.map<Widget>((e) {
+                                                  final t = DateTime.tryParse(e['bought_at']?.toString() ?? '');
+                                                  final dateLabel = t == null ? '' : '${t.day.toString().padLeft(2, "0")}/${t.month.toString().padLeft(2, "0")}/${t.year}';
+                                                  return Padding(
+                                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text('${e['quantity_needed']} ${e['unit']} · $dateLabel',
+                                                              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                                        ),
+                                                        IconButton(
+                                                          padding: EdgeInsets.zero,
+                                                          constraints: const BoxConstraints(),
+                                                          icon: const Icon(Icons.close, color: Colors.white38, size: 16),
+                                                          onPressed: () => _removeItem(e),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(8),
+                                  itemCount: _pending.length,
+                                  itemBuilder: (_, i) {
+                                    final entry = _pending[i];
+                                    final id = entry['id'] as int;
+                                    final isBuying = _buying.contains(id);
+                                    final days = _daysUntilExpiry(entry);
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F3460),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Text('${entry['quantity_needed']} ${entry['unit']}'),
-                                                Text('${entry['purchase_count']} ຄັ້ງ', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                                Text('${entry['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                                Text('${entry['quantity_needed']} ${entry['unit']}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                                if (days != null)
+                                                  Text(
+                                                    days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
+                                                    style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                                                  ),
                                               ],
-                                            )
-                                          : Text('${entry['quantity_needed']} ${entry['unit']}'),
-                                    ),
-                                    if (_showHistory)
-                                      DataCell(Text(boughtText, style: const TextStyle(color: Color(0xFF4CAF50)))),
-                                    DataCell(Text(expiryText, style: TextStyle(color: expiryColor))),
-                                    DataCell(Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (!_showHistory) ...[
+                                            ),
+                                          ),
                                           SizedBox(
-                                            height: 28,
+                                            height: 30,
                                             child: ElevatedButton(
                                               onPressed: isBuying ? null : () => _markBought(entry),
                                               style: ElevatedButton.styleFrom(
@@ -473,8 +546,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               ),
                                               child: isBuying
-                                                  ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                                  : const Text('ຊື້ແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                                  : const Text('ຊື້ແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 12)),
                                             ),
                                           ),
                                           IconButton(
@@ -484,26 +557,10 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                             onPressed: () => _removeItem(entry),
                                           ),
                                         ],
-                                        if (_showHistory)
-                                          SizedBox(
-                                            height: 28,
-                                            child: ElevatedButton(
-                                              onPressed: () => _markDepleted(entry),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFFE94560),
-                                                padding: const EdgeInsets.symmetric(horizontal: 10),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                              ),
-                                              child: const Text('ໝົດແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 11)),
-                                            ),
-                                          ),
-                                      ],
-                                    )),
-                                  ]);
-                                }).toList(),
-                              ),
-                            ),
-                          ),
+                                      ),
+                                    );
+                                  },
+                                ),
                         ),
                       ],
                     ),
