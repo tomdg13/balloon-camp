@@ -68,17 +68,13 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     final Map<int, Map<String, dynamic>> groups = {};
     for (final entry in _history) {
       final stockId = entry['stock_item_id'] as int;
+      final qty = double.tryParse(entry['quantity_needed'].toString()) ?? 0;
       if (!groups.containsKey(stockId)) {
-        // Find live stock item for current quantity
-        final stock = _stockItems.firstWhere(
-          (s) => s['id'] == stockId,
-          orElse: () => {'quantity': entry['quantity_needed'], 'unit': entry['unit']},
-        );
         groups[stockId] = {
           'stock_item_id': stockId,
           'name_lao': entry['name_lao'],
           'unit': entry['unit'],
-          'quantity_needed': stock['quantity'],
+          'quantity_needed': qty,
           'expiry_date': entry['expiry_date'],
           'bought_at': entry['bought_at'],
           'purchase_count': 1,
@@ -86,6 +82,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         };
       } else {
         final g = groups[stockId]!;
+        g['quantity_needed'] = (g['quantity_needed'] as double) + qty;
         g['purchase_count'] = (g['purchase_count'] as int) + 1;
         (g['entries'] as List).add(entry);
         // Keep the soonest (earliest) expiry across purchases
@@ -446,7 +443,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
                                                         Text('${group['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                                        Text('${group['quantity_needed']} ${group['unit']} · ${group['purchase_count']} ຄັ້ງ',
+                                                        Text('${(group['quantity_needed'] as double).toStringAsFixed(2)} ${group['unit']} · ${group['purchase_count']} ຄັ້ງ',
                                                             style: const TextStyle(color: Colors.white54, fontSize: 11)),
                                                         if (days != null)
                                                           Text(
