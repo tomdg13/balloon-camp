@@ -411,4 +411,21 @@ class ApiService {
     return List<dynamic>.from(res.data['data']);
   }
 
+
+  Future<List<dynamic>> getMenuItemIngredients(int menuItemId) async {
+    final res = await _dio.get('/api/menu/items/$menuItemId/ingredients');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> addMenuItemIngredient(int menuItemId, {required int stockItemId, required double quantity}) async {
+    await _dio.post('/api/menu/items/$menuItemId/ingredients', data: {
+      'stock_item_id': stockItemId,
+      'quantity': quantity,
+    });
+  }
+
+  Future<void> removeMenuItemIngredient(int menuItemId, int ingredientId) async {
+    await _dio.delete('/api/menu/items/$menuItemId/ingredients/$ingredientId');
+  }
+
 }
