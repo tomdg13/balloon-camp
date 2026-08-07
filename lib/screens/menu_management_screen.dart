@@ -305,6 +305,186 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     }
   }
 
+  Future<void> _showRecipeDialog(MenuItem item) async {
+    List<dynamic> ingredients = [];
+    List<dynamic> stockItems = [];
+    bool loading = true;
+
+    await showDialog(
+      context: context,
+      builder: (dCtx) => StatefulBuilder(
+        builder: (dCtx, setDlg) {
+          if (loading) {
+            Future.microtask(() async {
+              try {
+                final results = await Future.wait([
+                  ApiService().getMenuItemIngredients(item.id),
+                  ApiService().getStockItems(),
+                ]);
+                setDlg(() {
+                  ingredients = results[0];
+                  stockItems = results[1];
+                  loading = false;
+                });
+              } catch (_) {
+                setDlg(() => loading = false);
+              }
+            });
+          }
+
+          Future<void> addIngredient() async {
+            if (stockItems.isEmpty) return;
+
+            const categories = [
+              {'value': 'meat', 'label': 'ຊີ້ນ'},
+              {'value': 'vegetable', 'label': 'ຜັກ'},
+              {'value': 'seasoning', 'label': 'ເຄື່ອງປຸງ'},
+              {'value': 'other', 'label': 'ອື່ນໆ'},
+            ];
+
+            String selectedCategory = categories.first['value']!;
+            List<dynamic> itemsInCat = stockItems.where((s) => s['category'] == selectedCategory).toList();
+            int? selectedStockId = itemsInCat.isNotEmpty ? itemsInCat.first['id'] as int : null;
+            final qtyCtrl = TextEditingController();
+
+            final result = await showDialog<bool>(
+              context: dCtx,
+              builder: (d2) => StatefulBuilder(
+                builder: (d2, setD2) => AlertDialog(
+                  backgroundColor: const Color(0xFF16213E),
+                  title: const Text('ເພີ່ມສ່ວນປະກອບ', style: TextStyle(color: Colors.white)),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: selectedCategory,
+                        dropdownColor: const Color(0xFF16213E),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'ໝວດໝູ່', labelStyle: TextStyle(color: Colors.white54)),
+                        items: categories.map((c) {
+                          return DropdownMenuItem<String>(value: c['value'], child: Text(c['label']!));
+                        }).toList(),
+                        onChanged: (v) => setD2(() {
+                          selectedCategory = v ?? selectedCategory;
+                          itemsInCat = stockItems.where((s) => s['category'] == selectedCategory).toList();
+                          selectedStockId = itemsInCat.isNotEmpty ? itemsInCat.first['id'] as int : null;
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      if (itemsInCat.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text('ບໍ່ມີວັດຖຸດິບໃນໝວດນີ້', style: TextStyle(color: Colors.white38)),
+                        )
+                      else
+                        DropdownButtonFormField<int>(
+                          value: selectedStockId,
+                          dropdownColor: const Color(0xFF16213E),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(labelText: 'ວັດຖຸດິບ', labelStyle: TextStyle(color: Colors.white54)),
+                          items: itemsInCat.map<DropdownMenuItem<int>>((s) {
+                            return DropdownMenuItem<int>(value: s['id'] as int, child: Text('${s['name_lao']}'));
+                          }).toList(),
+                          onChanged: (v) => setD2(() => selectedStockId = v ?? selectedStockId),
+                        ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: qtyCtrl,
+                        autofocus: true,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'ຈຳນວນທີ່ໃຊ້', labelStyle: TextStyle(color: Colors.white54)),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(d2, false), child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54))),
+                    TextButton(onPressed: () => Navigator.pop(d2, true), child: const Text('ເພີ່ມ', style: TextStyle(color: Color(0xFFE94560)))),
+                  ],
+                ),
+              ),
+            );
+
+            if (result != true || selectedStockId == null) return;
+            final qty = double.tryParse(qtyCtrl.text);
+            if (qty == null || qty <= 0) return;
+
+            try {
+              await ApiService().addMenuItemIngredient(item.id, stockItemId: selectedStockId!, quantity: qty);
+              final fresh = await ApiService().getMenuItemIngredients(item.id);
+              setDlg(() => ingredients = fresh);
+            } catch (e) {
+              _showError('ເກີດຂໍ້ຜິດພາດ: $e');
+            }
+          }
+
+          Future<void> removeIngredient(dynamic ing) async {
+            try {
+              await ApiService().removeMenuItemIngredient(item.id, ing['id']);
+              final fresh = await ApiService().getMenuItemIngredients(item.id);
+              setDlg(() => ingredients = fresh);
+            } catch (e) {
+              _showError('ເກີດຂໍ້ຜິດພາດ: $e');
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16213E),
+            title: Text('ສ່ວນປະກອບ: ${item.nameLao}', style: const TextStyle(color: Colors.white)),
+            content: SizedBox(
+              width: 350,
+              child: loading
+                  ? const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(color: Color(0xFFE94560))))
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (ingredients.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Text('ຍັງບໍ່ມີສ່ວນປະກອບ', style: TextStyle(color: Colors.white38)),
+                          )
+                        else
+                          ...ingredients.map((ing) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text('${ing['name_lao']} · ${ing['quantity']} ${ing['unit']}',
+                                          style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                    ),
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      icon: const Icon(Icons.close, color: Color(0xFFE94560), size: 16),
+                                      onPressed: () => removeIngredient(ing),
+                                    ),
+                                  ],
+                                ),
+                              )),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: addIngredient,
+                            icon: const Icon(Icons.add, color: Color(0xFF4CAF50), size: 16),
+                            label: const Text('ເພີ່ມສ່ວນປະກອບ', style: TextStyle(color: Color(0xFF4CAF50))),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dCtx),
+                child: const Text('ປິດ', style: TextStyle(color: Colors.white54)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   InputDecoration _inputDeco(String label, IconData icon) => InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white54),
@@ -453,6 +633,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                         onEdit: () => _showItemDialog(item: item),
                         onToggle: () => _toggleAvailable(item),
                         onDelete: () => _confirmDelete(item),
+                        onRecipe: () => _showRecipeDialog(item),
                       );
                     },
                   ),
@@ -469,6 +650,7 @@ class _MenuCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
+  final VoidCallback onRecipe;
 
   const _MenuCard({
     required this.item,
@@ -477,6 +659,7 @@ class _MenuCard extends StatelessWidget {
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
+    required this.onRecipe,
   });
 
   @override
@@ -660,6 +843,18 @@ class _MenuCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(Icons.delete_outline, color: Color(0xFFE94560), size: 14),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: onRecipe,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.receipt_long, color: Color(0xFF4CAF50), size: 14),
                       ),
                     ),
                   ]),
