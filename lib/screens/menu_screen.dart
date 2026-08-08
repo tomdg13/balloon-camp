@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -515,24 +516,43 @@ class _PreviousOrdersPanel extends StatefulWidget {
 class _PreviousOrdersPanelState extends State<_PreviousOrdersPanel> {
   List<Map<String, dynamic>> _orders = [];
   bool _loading = true;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[PREV] initState called for table: ' + widget.tableNumber + ' at ' + DateTime.now().toString());
     _load();
+    _timer = Timer.periodic(const Duration(seconds: 8), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    debugPrint('[PREV] dispose called for table: ' + widget.tableNumber);
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    debugPrint('[PREV] _load() called for table: ' + widget.tableNumber + ' at ' + DateTime.now().toString());
     try {
       // Get all active orders for this table
       final allOrders = await ApiService().getOrders();
+      debugPrint('[PREV] API returned ' + allOrders.length.toString() + ' orders');
+      for (final o in allOrders) { debugPrint('[PREV] order id=' + o.id.toString() + ' table="' + o.tableNumber + '" status=' + o.status); }
+      debugPrint('=== PREV ORDERS DEBUG ===');
+      debugPrint('widget.tableNumber: ' + widget.tableNumber);
+      for (final o in allOrders) {
+        debugPrint('order id=' + o.id.toString() + ' tableNumber=' + o.tableNumber + ' status=' + o.status);
+      }
       final tableOrders = allOrders
           .where((o) =>
               o.tableNumber == widget.tableNumber &&
               o.status != 'paid' &&
               o.status != 'cancelled')
           .toList();
+      debugPrint('[PREV] widget.tableNumber="' + widget.tableNumber + '" matched: ' + tableOrders.length.toString());
 
       // Load detail for each order
       final details = <Map<String, dynamic>>[];
@@ -546,7 +566,10 @@ class _PreviousOrdersPanelState extends State<_PreviousOrdersPanel> {
         _orders = details;
         _loading = false;
       });
-    } catch (e) {
+      debugPrint('[PREV] setState done, _orders.length=' + _orders.length.toString());
+    } catch (e, stack) {
+      debugPrint('[PREV] ERROR CAUGHT: ' + e.toString());
+      debugPrint('[PREV] STACK: ' + stack.toString());
       setState(() => _loading = false);
     }
   }

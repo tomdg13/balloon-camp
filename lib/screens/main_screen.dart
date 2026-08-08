@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -263,11 +264,19 @@ class _TablesPage extends StatefulWidget {
 class _TablesPageState extends State<_TablesPage> {
   List<RestaurantTable> _tables = [];
   bool _loading = true;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -510,11 +519,19 @@ class _RecentOrdersPanel extends StatefulWidget {
 class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
   List<Order> _orders = [];
   bool _loading = true;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -648,7 +665,7 @@ class _RecentOrdersPanelState extends State<_RecentOrdersPanel> {
                                 Row(children: [
                                   const Icon(Icons.person, color: Colors.white38, size: 13),
                                   const SizedBox(width: 4),
-                                  Text(o.staffName,
+                                  Text(o.staffName ?? "ລູກຄ້າ",
                                       style: const TextStyle(
                                           color: Colors.white54, fontSize: 12)),
                                   const Icon(Icons.access_time,

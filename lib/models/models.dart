@@ -23,7 +23,7 @@ class RestaurantTable {
 
   factory RestaurantTable.fromJson(Map<String, dynamic> j) => RestaurantTable(
         id: j['id'],
-        tableNumber: j['table_number'],
+        tableNumber: j['table_number'] ?? '',
         capacity: j['capacity'] ?? 4,
         status: j['status'] ?? 'available',
         qrToken: j['qr_token'],
@@ -95,7 +95,7 @@ class CartItem {
 class Order {
   final int id;
   final String tableNumber;
-  final String staffName;
+  final String? staffName;
   final String status;
   final int itemCount;
   final double? totalAmount;
@@ -104,7 +104,7 @@ class Order {
   Order({
     required this.id,
     required this.tableNumber,
-    required this.staffName,
+    this.staffName,
     required this.status,
     required this.itemCount,
     this.totalAmount,
@@ -113,12 +113,12 @@ class Order {
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
         id: j['id'],
-        tableNumber: j['table_number'],
+        tableNumber: j['table_number'] ?? '',
         staffName: j['staff_name'],
-        status: j['status'],
+        status: j['status'] ?? '',
         itemCount: j['item_count'] ?? 0,
         totalAmount: j['total_amount'] != null ? double.tryParse(j['total_amount'].toString()) : null,
-        createdAt: DateTime.parse(j['created_at']),
+        createdAt: j['created_at'] != null ? DateTime.parse(j['created_at']) : DateTime.now(),
       );
 }
 

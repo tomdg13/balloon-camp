@@ -118,8 +118,10 @@ class _OrderCardState extends State<_OrderCard> {
   Future<void> _loadDetail() async {
     try {
       final d = await ApiService().getOrderDetail(widget.order.id);
+      debugPrint('🍳 [kitchen] order ${widget.order.id} loaded, items: ${(d['items'] as List?)?.length ?? 'unknown'}');
       if (mounted) setState(() { _detail = d; _loadingDetail = false; });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('❌ [kitchen] order ${widget.order.id} getOrderDetail FAILED: $e');
       if (mounted) setState(() => _loadingDetail = false);
     }
   }
