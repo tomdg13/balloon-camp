@@ -344,6 +344,16 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
+  Future<List<dynamic>> getStockTransactionsSummary() async {
+    final res = await _dio.get('/api/stock/transactions/summary');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<List<dynamic>> getStockTransactions(int id) async {
+    final res = await _dio.get('/api/stock/$id/transactions');
+    return List<dynamic>.from(res.data['data']);
+  }
+
   Future<void> createStockItem(Map<String, dynamic> data) async {
     await _dio.post('/api/stock', data: data);
   }
