@@ -139,7 +139,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ── Side Navigation ───────────────────────────────────────────
-class _SideNav extends StatelessWidget {
+class _SideNav extends StatefulWidget {
   final int selected;
   final bool isAdmin;
   final bool isKitchen;
@@ -155,7 +155,41 @@ class _SideNav extends StatelessWidget {
   });
 
   @override
+  State<_SideNav> createState() => _SideNavState();
+}
+
+class _SideNavState extends State<_SideNav> {
+  int _lowStockCount = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLowStockCount();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _loadLowStockCount());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadLowStockCount() async {
+    if (!widget.isAdmin) return;
+    try {
+      final count = await ApiService().getLowStockCount();
+      if (mounted) setState(() => _lowStockCount = count);
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final selected = widget.selected;
+    final isAdmin = widget.isAdmin;
+    final isKitchen = widget.isKitchen;
+    final staff = widget.staff;
+    final onSelect = widget.onSelect;
     return Container(
       color: const Color(0xFF16213E),
       child: Column(
@@ -207,7 +241,7 @@ class _SideNav extends StatelessWidget {
                     _item(context, Icons.table_bar, 'ຈັດການໂຕະ', kPageTableMgmt),
                     _item(context, Icons.restaurant_menu, 'ຈັດການເມນູ', kPageMenuMgmt),
                     _item(context, Icons.settings, 'ຕັ້ງຄ່າຮ້ານ', kPageSettings),
-                    _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock),
+                    _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock, badgeCount: _lowStockCount),
                     _item(context, Icons.receipt_long, 'ລາຍງານວັດຖຸດິບ', kPageStockReport),
                     _item(context, Icons.shopping_cart, 'ລາຍການອອກຕະຫຼາດ', kPageShoppingList),
                     _item(context, Icons.bar_chart, 'ລາຍງານ', kPageReports),
@@ -238,8 +272,8 @@ class _SideNav extends StatelessWidget {
     );
   }
 
-  Widget _item(BuildContext context, IconData icon, String label, int page) {
-    final active = selected == page;
+  Widget _item(BuildContext context, IconData icon, String label, int page, {int badgeCount = 0}) {
+    final active = widget.selected == page;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: ListTile(
@@ -250,10 +284,17 @@ class _SideNav extends StatelessWidget {
                 color: active ? const Color(0xFFE94560) : Colors.white70,
                 fontWeight: active ? FontWeight.bold : FontWeight.normal,
                 fontSize: 14)),
+        trailing: badgeCount > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: const Color(0xFFE94560), borderRadius: BorderRadius.circular(10)),
+                child: Text('$badgeCount', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+              )
+            : null,
         selected: active,
         selectedTileColor: const Color(0xFFE94560).withValues(alpha: 0.1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        onTap: () => onSelect(page),
+        onTap: () => widget.onSelect(page),
       ),
     );
   }

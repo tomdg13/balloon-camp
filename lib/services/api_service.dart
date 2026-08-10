@@ -354,6 +354,11 @@ class ApiService {
     return List<dynamic>.from(res.data['data']);
   }
 
+  Future<int> getLowStockCount() async {
+    final res = await _dio.get('/api/stock/low/count');
+    return res.data['count'] as int;
+  }
+
   Future<void> createStockItem(Map<String, dynamic> data) async {
     await _dio.post('/api/stock', data: data);
   }
