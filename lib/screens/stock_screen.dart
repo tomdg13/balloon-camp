@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 
 class StockScreen extends StatefulWidget {
@@ -201,7 +202,16 @@ class _StockScreenState extends State<StockScreen> {
     final nameEnCtrl = TextEditingController(text: item?['name_en'] ?? '');
     final unitCtrl = TextEditingController(text: item?['unit']?.toString() ?? 'kg');
     final qtyCtrl = TextEditingController(text: item?['quantity']?.toString() ?? '0');
-    final thresholdCtrl = TextEditingController(text: item?['low_stock_threshold']?.toString() ?? '1');
+    final thresholdCtrl = TextEditingController(
+      text: item?['low_stock_threshold'] != null
+          ? NumberFormat('#,##0.##').format(double.tryParse(item['low_stock_threshold'].toString()) ?? 1)
+          : '1',
+    );
+    final costCtrl = TextEditingController(
+      text: item?['cost_per_unit'] != null
+          ? NumberFormat('#,##0.##').format(double.tryParse(item['cost_per_unit'].toString()) ?? 0)
+          : '0',
+    );
     String category = item?['category'] ?? _selectedCategory;
     final expiryDaysCtrl = TextEditingController();
     if (item?['expiry_date'] != null) {
@@ -219,7 +229,7 @@ class _StockScreenState extends State<StockScreen> {
       builder: (dCtx) => StatefulBuilder(
         builder: (dCtx, setDlg) => AlertDialog(
           backgroundColor: const Color(0xFF16213E),
-          title: Text(item == null ? 'Add ingredient' : 'Edit ingredient',
+          title: Text(item == null ? 'ເພີ່ມວັດຖຸດິບ' : 'ແກ້ໄຂວັດຖຸດິບ',
               style: const TextStyle(color: Colors.white)),
           content: SingleChildScrollView(
             child: Column(
@@ -228,55 +238,74 @@ class _StockScreenState extends State<StockScreen> {
                 TextField(
                   controller: nameLaoCtrl,
                   style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Name (Lao)', labelStyle: TextStyle(color: Colors.white54)),
+                  decoration: const InputDecoration(labelText: 'ຊື່ (ພາສາລາວ)', labelStyle: TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: nameEnCtrl,
                   style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Name (English)', labelStyle: TextStyle(color: Colors.white54)),
+                  decoration: const InputDecoration(labelText: 'ຊື່ (ພາສາອັງກິດ)', labelStyle: TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: category,
                   dropdownColor: const Color(0xFF16213E),
                   style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Category', labelStyle: TextStyle(color: Colors.white54)),
+                  decoration: const InputDecoration(labelText: 'ໝວດໝູ່', labelStyle: TextStyle(color: Colors.white54)),
                   items: const [
-                    DropdownMenuItem(value: 'meat', child: Text('Meat')),
-                    DropdownMenuItem(value: 'vegetable', child: Text('Vegetable')),
-                    DropdownMenuItem(value: 'seasoning', child: Text('Seasoning')),
-                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                    DropdownMenuItem(value: 'meat', child: Text('ຊີ້ນ')),
+                    DropdownMenuItem(value: 'vegetable', child: Text('ຜັກ')),
+                    DropdownMenuItem(value: 'seasoning', child: Text('ເຄື່ອງປຸງ')),
+                    DropdownMenuItem(value: 'other', child: Text('ອື່ນໆ')),
                   ],
                   onChanged: (v) => setDlg(() => category = v ?? 'meat'),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: qtyCtrl,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: 'Quantity', labelStyle: TextStyle(color: Colors.white54)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: unitCtrl,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: 'Unit', labelStyle: TextStyle(color: Colors.white54)),
-                      ),
-                    ),
-                  ],
+                TextField(
+                  controller: unitCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'ຫົວໜ່ວຍ (kg, ອັນ, ...)', labelStyle: TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: thresholdCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Low stock alert below', labelStyle: TextStyle(color: Colors.white54)),
+                  decoration: const InputDecoration(labelText: 'ແຈ້ງເຕືອນເມື່ອຕ່ຳກວ່າ', labelStyle: TextStyle(color: Colors.white54)),
+                  onChanged: (v) {
+                    final digits = v.replaceAll(',', '');
+                    final n = double.tryParse(digits);
+                    if (n == null) return;
+                    final formatted = NumberFormat('#,##0.##').format(n);
+                    if (formatted != v) {
+                      thresholdCtrl.value = TextEditingValue(
+                        text: formatted,
+                        selection: TextSelection.collapsed(offset: formatted.length),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: costCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'ຕົ້ນທຶນຕໍ່ ${unitCtrl.text.isEmpty ? "ຫົວໜ່ວຍ" : unitCtrl.text} (ກີບ)',
+                    labelStyle: const TextStyle(color: Colors.white54),
+                  ),
+                  onChanged: (v) {
+                    final digits = v.replaceAll(',', '');
+                    final n = double.tryParse(digits);
+                    if (n == null) return;
+                    final formatted = NumberFormat('#,##0.##').format(n);
+                    if (formatted != v) {
+                      costCtrl.value = TextEditingValue(
+                        text: formatted,
+                        selection: TextSelection.collapsed(offset: formatted.length),
+                      );
+                    }
+                  },
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -296,11 +325,11 @@ class _StockScreenState extends State<StockScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dCtx, true),
-              child: const Text('Save', style: TextStyle(color: Color(0xFFE94560))),
+              child: const Text('ບັນທຶກ', style: TextStyle(color: Color(0xFFE94560))),
             ),
           ],
         ),
@@ -314,8 +343,8 @@ class _StockScreenState extends State<StockScreen> {
       'name_en': nameEnCtrl.text.trim(),
       'category': category,
       'unit': unitCtrl.text.trim(),
-      'quantity': double.tryParse(qtyCtrl.text) ?? 0,
-      'low_stock_threshold': double.tryParse(thresholdCtrl.text) ?? 1,
+            'low_stock_threshold': double.tryParse(thresholdCtrl.text.replaceAll(',', '')) ?? 1,
+      'cost_per_unit': double.tryParse(costCtrl.text.replaceAll(',', '')) ?? 0,
     };
     final daysInput = int.tryParse(expiryDaysCtrl.text.trim());
     if (daysInput != null) {
