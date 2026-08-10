@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'dart:async';
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -149,8 +150,15 @@ class _OrderCardState extends State<_OrderCard> {
     } catch (e) {
       if (mounted) {
         setState(() => _togglingIds.remove(itemId));
+        String msg = 'ເກີດຂໍ້ຜິດພາດ: $e';
+        if (e is DioException) {
+          final serverMsg = (e.response?.data is Map) ? e.response!.data['message']?.toString() ?? '' : '';
+          if (e.response?.statusCode == 400 && serverMsg.toLowerCase().contains('insufficient stock')) {
+            msg = 'ວັດຖຸດິບໝົດ ກະລຸນາສັ່ງວັດຖຸດິບມາເພີ່ມ';
+          }
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ: $e'),
+            SnackBar(content: Text(msg),
                 backgroundColor: const Color(0xFFE94560)));
       }
     }

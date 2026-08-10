@@ -64,17 +64,44 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     return expiry.difference(todayDate).inDays;
   }
 
+  // Status for a single batch entry: 'expired' | 'valid' | 'no_expiry' | 'used_up'
+  String _entryStatus(dynamic entry) {
+    final needed = double.tryParse(entry['quantity_needed'].toString()) ?? 0;
+    final used = double.tryParse((entry['quantity_used'] ?? 0).toString()) ?? 0;
+    if (needed - used <= 0) return 'used_up';
+    final expiryStr = entry['expiry_date'];
+    if (expiryStr == null) return 'no_expiry';
+    final expiry = DateTime.tryParse(expiryStr.toString());
+    if (expiry == null) return 'no_expiry';
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    return expiry.isBefore(todayDate) ? 'expired' : 'valid';
+  }
+
+  double _entryRemaining(dynamic entry) {
+    final needed = double.tryParse(entry['quantity_needed'].toString()) ?? 0;
+    final used = double.tryParse((entry['quantity_used'] ?? 0).toString()) ?? 0;
+    final remaining = needed - used;
+    return remaining > 0 ? remaining : 0;
+  }
+
   List<dynamic> get _groupedHistory {
     final Map<int, Map<String, dynamic>> groups = {};
     for (final entry in _history) {
       final stockId = entry['stock_item_id'] as int;
       final qty = double.tryParse(entry['quantity_needed'].toString()) ?? 0;
+      final status = _entryStatus(entry);
+      final remaining = _entryRemaining(entry);
+      // Only count toward the available total if the batch is valid (not expired) and has remaining stock
+      final availableQty = (status == 'valid' || status == 'no_expiry') ? remaining : 0.0;
+
       if (!groups.containsKey(stockId)) {
         groups[stockId] = {
           'stock_item_id': stockId,
           'name_lao': entry['name_lao'],
           'unit': entry['unit'],
           'quantity_needed': qty,
+          'available_quantity': availableQty,
           'expiry_date': entry['expiry_date'],
           'bought_at': entry['bought_at'],
           'purchase_count': 1,
@@ -83,6 +110,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       } else {
         final g = groups[stockId]!;
         g['quantity_needed'] = (g['quantity_needed'] as double) + qty;
+        g['available_quantity'] = (g['available_quantity'] as double) + availableQty;
         g['purchase_count'] = (g['purchase_count'] as int) + 1;
         (g['entries'] as List).add(entry);
         // Keep the soonest (earliest) expiry across purchases
@@ -443,7 +471,8 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
                                                         Text('${group['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                                        Text('${(group['quantity_needed'] as double).toStringAsFixed(2)} ${group['unit']} · ${group['purchase_count']} ຄັ້ງ',
+                                                        Text(
+                                                            '${(group['available_quantity'] as double).toStringAsFixed(2)} ${group['unit']} ຍັງໃຊ້ໄດ້ · ${group['purchase_count']} ຄັ້ງ',
                                                             style: const TextStyle(color: Colors.white54, fontSize: 11)),
                                                         if (days != null)
                                                           Text(
@@ -477,13 +506,57 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                                                 children: entries.map<Widget>((e) {
                                                   final t = DateTime.tryParse(e['bought_at']?.toString() ?? '');
                                                   final dateLabel = t == null ? '' : '${t.day.toString().padLeft(2, "0")}/${t.month.toString().padLeft(2, "0")}/${t.year}';
+                                                  final status = _entryStatus(e);
+                                                  String statusLabel;
+                                                  Color statusColor;
+                                                  switch (status) {
+                                                    case 'expired':
+                                                      statusLabel = 'ໝົດອາຍຸແລ້ວ';
+                                                      statusColor = const Color(0xFFE94560);
+                                                      break;
+                                                    case 'used_up':
+                                                      statusLabel = 'ໃຊ້ໝົດແລ້ວ';
+                                                      statusColor = Colors.white38;
+                                                      break;
+                                                    case 'no_expiry':
+                                                      statusLabel = 'ບໍ່ມີວັນໝົດອາຍຸ';
+                                                      statusColor = const Color(0xFFFF9800);
+                                                      break;
+                                                    default:
+                                                      statusLabel = 'ໃຊ້ໄດ້';
+                                                      statusColor = const Color(0xFF4CAF50);
+                                                  }
+                                                  final remaining = _entryRemaining(e);
                                                   return Padding(
                                                     padding: const EdgeInsets.symmetric(vertical: 4),
                                                     child: Row(
                                                       children: [
                                                         Expanded(
-                                                          child: Text('${e['quantity_needed']} ${e['unit']} · $dateLabel',
-                                                              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text('${e['quantity_needed']} ${e['unit']} · $dateLabel',
+                                                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                                              Row(
+                                                                children: [
+                                                                  Container(
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                                    decoration: BoxDecoration(
+                                                                      color: statusColor.withValues(alpha: 0.15),
+                                                                      borderRadius: BorderRadius.circular(6),
+                                                                    ),
+                                                                    child: Text(statusLabel,
+                                                                        style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                                  ),
+                                                                  if (status != 'used_up' && status != 'expired') ...[
+                                                                    const SizedBox(width: 6),
+                                                                    Text('ເຫຼືອ ${remaining.toStringAsFixed(2)}',
+                                                                        style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                                                  ],
+                                                                ],
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
                                                         IconButton(
                                                           padding: EdgeInsets.zero,

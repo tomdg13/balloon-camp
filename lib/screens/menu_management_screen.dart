@@ -55,6 +55,16 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         .items;
   }
 
+  // ─── Reorder category up or down ───────────────────────────────────────────
+  Future<void> _reorderCategory(MenuCategory cat, String direction) async {
+    try {
+      await ApiService().reorderCategory(cat.id, direction);
+      await _load();
+    } catch (e) {
+      _showError('ຈັດລໍາດັບບໍ່ສຳເລັດ: $e');
+    }
+  }
+
   Future<void> _uploadImage(MenuItem item) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -538,7 +548,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
         const Expanded(child: Center(child: CircularProgressIndicator(color: Color(0xFFE94560))))
       else
         Expanded(child: Row(children: [
-          // Category sidebar
+          // ── Category sidebar ────────────────────────────────────────────────
           Container(
             width: 190,
             decoration: const BoxDecoration(
@@ -550,9 +560,9 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
                 child: Row(
                   children: [
-                    Expanded(
+                    const Expanded(
                       child: Text('ໝວດໝູ່',
-                          style: const TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
+                          style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
                     ),
                     GestureDetector(
                       onTap: () => _showCategoryDialog(),
@@ -567,18 +577,25 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   itemBuilder: (_, i) {
                     final cat = _categories[i];
                     final selected = cat.id == _selectedCategoryId;
+                    final isFirst = i == 0;
+                    final isLast = i == _categories.length - 1;
                     final withImg = cat.items.where((it) => it.imageUrl != null).length;
+
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                        color: selected
+                            ? const Color(0xFFE94560).withValues(alpha: 0.15)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
-                        border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
+                        border: selected
+                            ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4))
+                            : null,
                       ),
                       child: ListTile(
                         dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        contentPadding: const EdgeInsets.only(left: 12, right: 4, top: 2, bottom: 2),
                         title: Text(cat.nameLao,
                             style: TextStyle(
                                 color: selected ? const Color(0xFFE94560) : Colors.white70,
@@ -590,15 +607,41 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // ── Move Up ──────────────────────────────────────
+                            GestureDetector(
+                              onTap: isFirst ? null : () => _reorderCategory(cat, 'up'),
+                              child: Icon(
+                                Icons.keyboard_arrow_up_rounded,
+                                size: 18,
+                                color: isFirst
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.white54,
+                              ),
+                            ),
+                            // ── Move Down ────────────────────────────────────
+                            GestureDetector(
+                              onTap: isLast ? null : () => _reorderCategory(cat, 'down'),
+                              child: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 18,
+                                color: isLast
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.white54,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            // ── Edit ─────────────────────────────────────────
                             GestureDetector(
                               onTap: () => _showCategoryDialog(category: cat),
                               child: const Icon(Icons.edit, color: Colors.white38, size: 14),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
+                            // ── Delete ───────────────────────────────────────
                             GestureDetector(
                               onTap: () => _confirmDeleteCategory(cat),
                               child: const Icon(Icons.delete_outline, color: Color(0xFFE94560), size: 14),
                             ),
+                            const SizedBox(width: 4),
                           ],
                         ),
                       ),
@@ -609,7 +652,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
             ]),
           ),
 
-          // Items grid
+          // ── Items grid ──────────────────────────────────────────────────────
           Expanded(
             child: _currentItems.isEmpty
                 ? const Center(child: Text('ບໍ່ມີເມນູໃນໝວດນີ້',
@@ -643,6 +686,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 class _MenuCard extends StatelessWidget {
   final MenuItem item;
   final bool uploading;
@@ -691,7 +735,6 @@ class _MenuCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
                 child: Stack(fit: StackFit.expand, children: [
-                  // Image or placeholder
                   item.imageUrl != null
                       ? CachedNetworkImage(
                           imageUrl: item.imageUrl!,
@@ -705,8 +748,6 @@ class _MenuCard extends StatelessWidget {
                           errorWidget: (_, __, ___) => _imgPlaceholder(),
                         )
                       : _imgPlaceholder(),
-
-                  // Upload overlay
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -719,14 +760,11 @@ class _MenuCard extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Camera icon
                   if (uploading)
                     Container(
                       color: Colors.black54,
                       child: const Center(
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2)),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
                     )
                   else
                     Positioned(
@@ -744,16 +782,13 @@ class _MenuCard extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                  // Unavailable overlay
                   if (!item.isAvailable)
                     Container(
                       color: Colors.black.withValues(alpha: 0.5),
                       child: const Center(
                         child: Text('ປິດຂາຍ',
                             style: TextStyle(
-                                color: Colors.white54,
-                                fontWeight: FontWeight.bold)),
+                                color: Colors.white54, fontWeight: FontWeight.bold)),
                       ),
                     ),
                 ]),
@@ -782,14 +817,11 @@ class _MenuCard extends StatelessWidget {
                         ? '${NumberFormat.decimalPattern().format(item.price)} ກີບ'
                         : 'ຍັງບໍ່ກຳນົດລາຄາ',
                     style: TextStyle(
-                        color: item.price > 0
-                            ? const Color(0xFFE94560)
-                            : Colors.white24,
+                        color: item.price > 0 ? const Color(0xFFE94560) : Colors.white24,
                         fontSize: 12,
                         fontWeight: FontWeight.w600),
                   ),
                   const Spacer(),
-                  // Action buttons
                   Row(children: [
                     Expanded(
                       child: GestureDetector(
@@ -877,6 +909,7 @@ class _MenuCard extends StatelessWidget {
         ]),
       );
 }
+
 class _ThousandsFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(

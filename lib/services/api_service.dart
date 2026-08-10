@@ -320,6 +320,11 @@ class ApiService {
     await _dio.delete('/api/menu/categories/$id');
   }
 
+  Future<void> reorderCategory(int categoryId, String direction) async {
+    await _dio.put('/api/menu/categories/$categoryId/reorder',
+        data: {'direction': direction});
+  }
+
   Future<void> deleteMenuItem(int id) async {
     await _dio.delete('/api/menu/items/$id');
   }
@@ -332,6 +337,11 @@ class ApiService {
 
   Future<void> adjustStockItem(int id, num delta) async {
     await _dio.patch('/api/stock/$id/adjust', data: {'delta': delta});
+  }
+
+  Future<Map<String, dynamic>> consumeStockItem(int id, num quantity) async {
+    final res = await _dio.post('/api/stock/$id/consume', data: {'quantity': quantity});
+    return Map<String, dynamic>.from(res.data);
   }
 
   Future<void> createStockItem(Map<String, dynamic> data) async {
@@ -351,6 +361,7 @@ class ApiService {
     final res = await _dio.get('/api/orders/items-ready/list');
     return List<dynamic>.from(res.data['data']);
   }
+
   Future<void> markItemServed(int itemId) async {
     await _dio.patch('/api/orders/items/$itemId/served');
   }
@@ -382,7 +393,6 @@ class ApiService {
     return res.data['image_url'];
   }
 
-
   Future<List<dynamic>> getShoppingList() async {
     final res = await _dio.get('/api/shopping-list');
     return List<dynamic>.from(res.data['data']);
@@ -404,12 +414,10 @@ class ApiService {
     await _dio.delete('/api/shopping-list/$id');
   }
 
-
   Future<List<dynamic>> getShoppingListHistory() async {
     final res = await _dio.get('/api/shopping-list/history');
     return List<dynamic>.from(res.data['data']);
   }
-
 
   Future<List<dynamic>> getMenuItemIngredients(int menuItemId) async {
     final res = await _dio.get('/api/menu/items/$menuItemId/ingredients');
@@ -426,5 +434,4 @@ class ApiService {
   Future<void> removeMenuItemIngredient(int menuItemId, int ingredientId) async {
     await _dio.delete('/api/menu/items/$menuItemId/ingredients/$ingredientId');
   }
-
 }

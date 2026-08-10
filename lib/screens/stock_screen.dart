@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import '../services/api_service.dart';
 
 class StockScreen extends StatefulWidget {
@@ -136,6 +137,61 @@ class _StockScreenState extends State<StockScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
+      }
+    }
+  }
+
+  Future<void> _quickConsume(dynamic item) async {
+    final qtyCtrl = TextEditingController();
+    final result = await showDialog<double>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: Text("Use: ${item['name_lao']}", style: const TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: qtyCtrl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(color: Colors.white, fontSize: 20),
+          decoration: InputDecoration(
+            labelText: "Quantity (${item['unit']})",
+            labelStyle: const TextStyle(color: Colors.white54),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(qtyCtrl.text);
+              Navigator.pop(dCtx, v);
+            },
+            child: const Text('Use', style: TextStyle(color: Color(0xFFE94560))),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || result <= 0) return;
+
+    try {
+      await ApiService().consumeStockItem(item['id'], result);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Used $result ${item['unit']} of ${item['name_lao']}"),
+                backgroundColor: const Color(0xFF4CAF50)));
+      }
+    } catch (e) {
+      String msg = 'Error: $e';
+      if (e is DioException && e.response?.data is Map && e.response!.data['message'] != null) {
+        msg = e.response!.data['message'];
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: const Color(0xFFE94560)));
       }
     }
   }
@@ -468,6 +524,21 @@ class _StockScreenState extends State<StockScreen> {
                                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                                     child: Row(
                                       children: [
+                                        Expanded(
+                                          child: SizedBox(
+                                            height: 30,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF0F3460),
+                                                padding: EdgeInsets.zero,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              onPressed: () => _quickConsume(item),
+                                              child: const Text('Use', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
                                         Expanded(
                                           child: SizedBox(
                                             height: 30,
