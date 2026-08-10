@@ -348,12 +348,11 @@ class ApiService {
 
   // ── Waiter calls / items ready ─────────────────────────────
   Future<List<dynamic>> getItemsReady() async {
-    final res = await _dio.get('/api/orders/waiter-calls/list');
+    final res = await _dio.get('/api/orders/items-ready/list');
     return List<dynamic>.from(res.data['data']);
   }
-
-  Future<void> markItemServed(int orderId) async {
-    await _dio.patch('/api/orders/$orderId/call-waiter/clear');
+  Future<void> markItemServed(int itemId) async {
+    await _dio.patch('/api/orders/items/$itemId/served');
   }
 
   // ── Split bill generation ──────────────────────────────────

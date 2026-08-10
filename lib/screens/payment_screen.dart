@@ -71,11 +71,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
           o.status != 'paid' && o.status != 'cancelled').toList();
 
       final details = <Map<String, dynamic>>[];
+      debugPrint('🧾 [bill] table ${widget.tableNumber} → found ${tableOrders.length} unpaid orders: ${tableOrders.map((o) => o.id).toList()}');
       for (final o in tableOrders) {
         try {
           final d = await ApiService().getOrderDetail(o.id);
+          debugPrint('🧾 [bill] order ${o.id} detail OK, items: ${(d['items'] as List?)?.length ?? 'unknown'}');
           details.add(d);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('❌ [bill] order ${o.id} getOrderDetail FAILED: $e');
+        }
       }
 
       try {
@@ -118,7 +122,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       for (final order in _orders) {
         final orderId = order['id'] as int;
+        final orderStatus = order['status'] as String?;
         Bill bill;
+        // If order is already billed, look up its existing bill instead of
+        // trying to generate a new one (avoids 404/409 when order_items
+        // were cleared but the order status still says 'billed').
+        if (orderStatus == 'billed') {
+          final existingId = await ApiService().getBillIdByOrder(orderId);
+          if (existingId != null) {
+            bill = await ApiService().getBill(existingId);
+            if (_slipFile != null) {
+              if (!kIsWeb) {
+                await ApiService().uploadPaymentSlip(bill.id, _slipFile, _payMethod);
+              }
+            }
+            await ApiService().verifyPayment(bill.id, 'approved',
+                note: _payMethod == 'cash'
+                    ? 'ເງິນສົດ · ຈ່າຍ ${_cashCtrl.text} · ທອນ ${_fmtNum(_change)}'
+                    : _payMethod,
+                paymentMethod: _payMethod);
+            continue;
+          }
+          // No bill found for a 'billed' order with no items left — nothing
+          // meaningful to charge for this order, skip it.
+          continue;
+        }
         try {
           bill = await ApiService().generateBill(orderId);
         } on DioException catch (e) {
@@ -126,6 +154,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
             final existingId = await ApiService().getBillIdByOrder(orderId);
             if (existingId == null) rethrow;
             bill = await ApiService().getBill(existingId);
+          } else if (e.response?.statusCode == 404) {
+            // Order has no items (e.g. cleared separately) — nothing to bill.
+            continue;
           } else {
             rethrow;
           }

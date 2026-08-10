@@ -138,8 +138,12 @@ class _OrderCardState extends State<_OrderCard> {
           _togglingIds.remove(itemId);
         });
       }
-      if (allPrepared) {
+      // Notify the waiter as soon as ANY item is marked ready,
+      // not only when the whole order is complete.
+      if (newValue) {
         await ApiService().callWaiter(widget.order.id);
+      }
+      if (allPrepared) {
         widget.onAllPrepared();
       }
     } catch (e) {
