@@ -15,16 +15,10 @@ class StockScreen extends StatefulWidget {
 
 class _StockScreenState extends State<StockScreen> {
   List<dynamic> _items = [];
+  List<dynamic> _categories = [];
   bool _loading = true;
-  String _selectedCategory = 'meat';
+  int? _selectedCategoryId;
   final Map<int, bool> _uploadingImage = {};
-
-  final _categories = const [
-    {'value': 'meat', 'label': 'ຊີ້ນ'},
-    {'value': 'vegetable', 'label': 'ຜັກ'},
-    {'value': 'seasoning', 'label': 'ເຄື່ອງປຸງ'},
-    {'value': 'other', 'label': 'ອື່ນໆ'},
-  ];
 
   @override
   void initState() {
@@ -35,10 +29,115 @@ class _StockScreenState extends State<StockScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final items = await ApiService().getStockItems();
-      if (mounted) setState(() { _items = items; _loading = false; });
+      final results = await Future.wait([
+        ApiService().getStockItems(),
+        ApiService().getStockCategories(),
+      ]);
+      final items = results[0];
+      final cats = results[1];
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _categories = cats;
+          _selectedCategoryId ??= cats.isNotEmpty ? cats.first['id'] as int : null;
+          _loading = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _reorderCategory(dynamic cat, String direction) async {
+    try {
+      await ApiService().reorderStockCategory(cat['id'], direction);
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
+      }
+    }
+  }
+
+  Future<void> _showCategoryDialog({dynamic category}) async {
+    final nameLaoCtrl = TextEditingController(text: category?['name_lao'] ?? '');
+    final nameEnCtrl = TextEditingController(text: category?['name_en'] ?? '');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: Text(category == null ? 'ເພີ່ມໝວດໝູ່' : 'ແກ້ໄຂໝວດໝູ່', style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameLaoCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'ຊື່ໝວດໝູ່ (ລາວ)', labelStyle: TextStyle(color: Colors.white54)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameEnCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'ຊື່ໝວດໝູ່ (English)', labelStyle: TextStyle(color: Colors.white54)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('ບັນທຶກ', style: TextStyle(color: Color(0xFFE94560)))),
+        ],
+      ),
+    );
+    if (result != true || nameLaoCtrl.text.trim().isEmpty) return;
+    try {
+      if (category == null) {
+        await ApiService().createStockCategory(nameLao: nameLaoCtrl.text.trim(), nameEn: nameEnCtrl.text.trim());
+      } else {
+        await ApiService().updateStockCategory(category['id'], {
+          'name_lao': nameLaoCtrl.text.trim(),
+          'name_en': nameEnCtrl.text.trim(),
+        });
+      }
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteCategory(dynamic category) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: const Text('ລຶບໝວດໝູ່?', style: TextStyle(color: Colors.white)),
+        content: Text('ຕ້ອງການລຶບ "${category['name_lao']}" ອອກແທ້ບໍ?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('ລຶບ', style: TextStyle(color: Color(0xFFE94560)))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ApiService().deleteStockCategory(category['id']);
+      if (_selectedCategoryId == category['id']) _selectedCategoryId = null;
+      await _load();
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$msg'), backgroundColor: const Color(0xFFE94560)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
+      }
     }
   }
 
@@ -72,7 +171,7 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   List<dynamic> get _currentItems =>
-      _items.where((it) => it['category'] == _selectedCategory).toList();
+      _items.where((it) => it['category_id'] == _selectedCategoryId).toList();
 
   bool _isLow(dynamic item) {
     final qty = double.tryParse(item['quantity'].toString()) ?? 0;
@@ -212,7 +311,7 @@ class _StockScreenState extends State<StockScreen> {
           ? NumberFormat('#,##0.##').format(double.tryParse(item['cost_per_unit'].toString()) ?? 0)
           : '0',
     );
-    String category = item?['category'] ?? _selectedCategory;
+    int categoryId = item?['category_id'] ?? _selectedCategoryId ?? (_categories.isNotEmpty ? _categories.first['id'] as int : 0);
     final expiryDaysCtrl = TextEditingController();
     if (item?['expiry_date'] != null) {
       final existingExpiry = DateTime.tryParse(item['expiry_date'].toString());
@@ -247,18 +346,14 @@ class _StockScreenState extends State<StockScreen> {
                   decoration: const InputDecoration(labelText: 'ຊື່ (ພາສາອັງກິດ)', labelStyle: TextStyle(color: Colors.white54)),
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: category,
+                DropdownButtonFormField<int>(
+                  value: categoryId,
                   dropdownColor: const Color(0xFF16213E),
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(labelText: 'ໝວດໝູ່', labelStyle: TextStyle(color: Colors.white54)),
-                  items: const [
-                    DropdownMenuItem(value: 'meat', child: Text('ຊີ້ນ')),
-                    DropdownMenuItem(value: 'vegetable', child: Text('ຜັກ')),
-                    DropdownMenuItem(value: 'seasoning', child: Text('ເຄື່ອງປຸງ')),
-                    DropdownMenuItem(value: 'other', child: Text('ອື່ນໆ')),
-                  ],
-                  onChanged: (v) => setDlg(() => category = v ?? 'meat'),
+                  items: _categories.map<DropdownMenuItem<int>>((cat) =>
+                      DropdownMenuItem(value: cat['id'] as int, child: Text(cat['name_lao'] ?? ''))).toList(),
+                  onChanged: (v) => setDlg(() => categoryId = v ?? categoryId),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -341,7 +436,7 @@ class _StockScreenState extends State<StockScreen> {
     final data = {
       'name_lao': nameLaoCtrl.text.trim(),
       'name_en': nameEnCtrl.text.trim(),
-      'category': category,
+      'category_id': categoryId,
       'unit': unitCtrl.text.trim(),
             'low_stock_threshold': double.tryParse(thresholdCtrl.text.replaceAll(',', '')) ?? 1,
       'cost_per_unit': double.tryParse(costCtrl.text.replaceAll(',', '')) ?? 0,
@@ -435,34 +530,85 @@ class _StockScreenState extends State<StockScreen> {
             child: Row(
               children: [
                 Container(
-                  width: 170,
+                  width: 190,
                   decoration: const BoxDecoration(
                     color: Color(0xFF0F3460),
                     border: Border(right: BorderSide(color: Colors.white10)),
                   ),
-                  child: ListView(
-                    children: _categories.map((cat) {
-                      final selected = cat['value'] == _selectedCategory;
-                      final count = _items.where((it) => it['category'] == cat['value']).length;
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text('ໝວດໝູ່', style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
+                            ),
+                            GestureDetector(
+                              onTap: () => _showCategoryDialog(),
+                              child: const Icon(Icons.add_circle_outline, color: Colors.white38, size: 18),
+                            ),
+                          ],
                         ),
-                        child: ListTile(
-                          dense: true,
-                          title: Text(cat['label']!,
-                              style: TextStyle(
-                                  color: selected ? const Color(0xFFE94560) : Colors.white70,
-                                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 13)),
-                          trailing: Text('$count', style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                          onTap: () => setState(() => _selectedCategory = cat['value']!),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _categories.length,
+                          itemBuilder: (_, i) {
+                            final cat = _categories[i];
+                            final selected = cat['id'] == _selectedCategoryId;
+                            final count = _items.where((it) => it['category_id'] == cat['id']).length;
+                            final isFirst = i == 0;
+                            final isLast = i == _categories.length - 1;
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
+                              ),
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.only(left: 12, right: 4, top: 2, bottom: 2),
+                                title: Text(cat['name_lao'] ?? '',
+                                    style: TextStyle(
+                                        color: selected ? const Color(0xFFE94560) : Colors.white70,
+                                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                                        fontSize: 13)),
+                                subtitle: Text('$count ລາຍການ', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                onTap: () => setState(() => _selectedCategoryId = cat['id']),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: isFirst ? null : () => _reorderCategory(cat, 'up'),
+                                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 18,
+                                          color: isFirst ? Colors.white.withValues(alpha: 0.15) : Colors.white54),
+                                    ),
+                                    GestureDetector(
+                                      onTap: isLast ? null : () => _reorderCategory(cat, 'down'),
+                                      child: Icon(Icons.keyboard_arrow_down_rounded, size: 18,
+                                          color: isLast ? Colors.white.withValues(alpha: 0.15) : Colors.white54),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    GestureDetector(
+                                      onTap: () => _showCategoryDialog(category: cat),
+                                      child: const Icon(Icons.edit, color: Colors.white38, size: 14),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () => _confirmDeleteCategory(cat),
+                                      child: const Icon(Icons.delete_outline, color: Color(0xFFE94560), size: 14),
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(

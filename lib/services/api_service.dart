@@ -354,6 +354,27 @@ class ApiService {
     return List<dynamic>.from(res.data['data']);
   }
 
+  Future<List<dynamic>> getStockCategories() async {
+    final res = await _dio.get('/api/stock/categories');
+    return List<dynamic>.from(res.data['data']);
+  }
+
+  Future<void> createStockCategory({required String nameLao, String? nameEn}) async {
+    await _dio.post('/api/stock/categories', data: {'name_lao': nameLao, 'name_en': nameEn});
+  }
+
+  Future<void> updateStockCategory(int id, Map<String, dynamic> data) async {
+    await _dio.patch('/api/stock/categories/$id', data: data);
+  }
+
+  Future<void> deleteStockCategory(int id) async {
+    await _dio.delete('/api/stock/categories/$id');
+  }
+
+  Future<void> reorderStockCategory(int id, String direction) async {
+    await _dio.put('/api/stock/categories/$id/reorder', data: {'direction': direction});
+  }
+
   Future<int> getLowStockCount() async {
     final res = await _dio.get('/api/stock/low/count');
     return res.data['count'] as int;
