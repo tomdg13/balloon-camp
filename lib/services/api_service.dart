@@ -470,4 +470,70 @@ class ApiService {
   Future<void> removeMenuItemIngredient(int menuItemId, int ingredientId) async {
     await _dio.delete('/api/menu/items/$menuItemId/ingredients/$ingredientId');
   }
+// Add these methods inside the ApiService class in api_service.dart
+// (below setToken/clearToken — no need to pass Authorization manually,
+// _dio already has it set as a default header via setToken())
+
+Future<Map<String, Map<String, bool>>> getMyPermissions() async {
+  try {
+    final res = await _dio.get('/api/permissions/me');
+    final List data = res.data['data'];
+    final Map<String, Map<String, bool>> permissions = {};
+    for (var item in data) {
+      permissions[item['page_key']] = {
+        'view': item['can_view'] == 1,
+        'edit': item['can_edit'] == 1,
+        'delete': item['can_delete'] == 1,
+      };
+    }
+    return permissions;
+  } catch (e) {
+    return {};
+  }
+}
+
+// Admin only: get all pages (for the permission editor screen)
+Future<List<Map<String, dynamic>>> getAllPages() async {
+  try {
+    final res = await _dio.get('/api/permissions/pages');
+    return List<Map<String, dynamic>>.from(res.data['data']);
+  } catch (e) {
+    return [];
+  }
+}
+
+// Admin only: get permissions for a specific role
+Future<Map<String, Map<String, bool>>> getRolePermissions(String role) async {
+  try {
+    final res = await _dio.get('/api/permissions/$role');
+    final List data = res.data['data'];
+    final Map<String, Map<String, bool>> permissions = {};
+    for (var item in data) {
+      permissions[item['page_key']] = {
+        'view': item['can_view'] == 1,
+        'edit': item['can_edit'] == 1,
+        'delete': item['can_delete'] == 1,
+      };
+    }
+    return permissions;
+  } catch (e) {
+    return {};
+  }
+}
+
+// Admin only: bulk save permissions for a role
+Future<bool> saveRolePermissions(
+  String role,
+  List<Map<String, dynamic>> permissions,
+) async {
+  try {
+    final res = await _dio.put(
+      '/api/permissions/$role',
+      data: {'permissions': permissions},
+    );
+    return res.data['success'] == true;
+  } catch (e) {
+    return false;
+  }
+}
 }

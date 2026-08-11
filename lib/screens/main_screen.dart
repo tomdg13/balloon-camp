@@ -20,6 +20,7 @@ import 'shopping_list_screen.dart';
 import 'table_operations_screen.dart';
 import 'customer_screen.dart';
 import 'stock_report_screen.dart';
+import 'role_permissions_screen.dart';
 
 // ── Page index constants ──────────────────────────────────────
 const int kPageTables  = 0;
@@ -35,6 +36,24 @@ const int kPageStock = 9;
 const int kPageShoppingList = 10;
 const int kPageCustomers = 11;
 const int kPageStockReport = 12;
+const int kPageRolePermissions = 13;
+
+const Map<int, String> kPageKeyMap = {
+  kPageTables: 'tables',
+  kPageKitchen: 'kitchen',
+  kPageStaff: 'staff_management',
+  kPageTableMgmt: 'table_management',
+  kPageMenuMgmt: 'menu_management',
+  kPageSettings: 'settings',
+  kPageReports: 'reports',
+  kPageWaiterCalls: 'waiter_calls',
+  kPageTableOps: 'table_ops',
+  kPageStock: 'stock',
+  kPageShoppingList: 'shopping_list',
+  kPageCustomers: 'customers',
+  kPageStockReport: 'stock_report',
+  kPageRolePermissions: 'role_permissions',
+};
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -52,6 +71,8 @@ class _MainScreenState extends State<MainScreen> {
     final staff   = context.watch<AppProvider>().staff;
     final isAdmin = staff?.role == 'admin';
     final isKitchen = staff?.role == 'kitchen';
+    final allowedPages = context.watch<AppProvider>().allowedPages;
+    bool canSee(int page) => allowedPages.contains(kPageKeyMap[page]);
     final isWeb   = kIsWeb || MediaQuery.of(context).size.width > 700;
 
     final pages = [
@@ -68,6 +89,7 @@ class _MainScreenState extends State<MainScreen> {
       const ShoppingListScreen(),
       const CustomerScreen(),
       const StockReportScreen(),
+      const RolePermissionsScreen(),
     ];
 
     if (isWeb) {
@@ -131,6 +153,7 @@ class _MainScreenState extends State<MainScreen> {
       case kPageWaiterCalls: return 'ອາຫານພ້ອມ';
       case kPageStock: return 'ຄັງວັດຖຸດິບ';
       case kPageStockReport: return 'ລາຍງານວັດຖຸດິບ';
+      case kPageRolePermissions: return 'ຈັດການສິດທິບົດບາດ';
       case kPageShoppingList: return 'ລາຍການອອກຕະຫຼາດ';
       case kPageTableOps: return 'ຈັດການໂຕະລູກຄ້າ';
       default:           return 'Balloon Camp';
@@ -188,6 +211,8 @@ class _SideNavState extends State<_SideNav> {
     final selected = widget.selected;
     final isAdmin = widget.isAdmin;
     final isKitchen = widget.isKitchen;
+    final allowedPages = context.watch<AppProvider>().allowedPages;
+    bool canSee(int page) => allowedPages.contains(kPageKeyMap[page]);
     final staff = widget.staff;
     final onSelect = widget.onSelect;
     return Container(
@@ -226,10 +251,10 @@ class _SideNavState extends State<_SideNav> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                          _item(context, Icons.table_restaurant, 'ເລືອກໂຕະ', kPageTables),
+                          if (canSee(kPageTables)) _item(context, Icons.table_restaurant, 'ເລືອກໂຕະ', kPageTables),
                   if (isAdmin || isKitchen)
-                    _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
-                  _item(context, Icons.notifications_active, 'ອາຫານພ້ອມ', kPageWaiterCalls),
+                    if (canSee(kPageKitchen)) _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
+                  if (canSee(kPageWaiterCalls)) _item(context, Icons.notifications_active, 'ອາຫານພ້ອມ', kPageWaiterCalls),
 
                   if (isAdmin) ...[
                     const Padding(
@@ -237,16 +262,17 @@ class _SideNavState extends State<_SideNav> {
               child: Text('ADMIN',
                   style: TextStyle(color: Colors.white24, fontSize: 11, letterSpacing: 2)),
             ),
-                    _item(context, Icons.manage_accounts, 'ຈັດການພະນັກງານ', kPageStaff),
-                    _item(context, Icons.table_bar, 'ຈັດການໂຕະ', kPageTableMgmt),
-                    _item(context, Icons.restaurant_menu, 'ຈັດການເມນູ', kPageMenuMgmt),
-                    _item(context, Icons.settings, 'ຕັ້ງຄ່າຮ້ານ', kPageSettings),
-                    _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock, badgeCount: _lowStockCount),
-                    _item(context, Icons.receipt_long, 'ລາຍງານວັດຖຸດິບ', kPageStockReport),
-                    _item(context, Icons.shopping_cart, 'ລາຍການອອກຕະຫຼາດ', kPageShoppingList),
-                    _item(context, Icons.bar_chart, 'ລາຍງານ', kPageReports),
-                    _item(context, Icons.swap_horiz, 'ຈັດການໂຕະລູກຄ້າ', kPageTableOps),
-                    _item(context, Icons.people, 'ຈັດການລູກຄ້າ', kPageCustomers),
+                    if (canSee(kPageStaff)) _item(context, Icons.manage_accounts, 'ຈັດການພະນັກງານ', kPageStaff),
+                    if (isAdmin) _item(context, Icons.admin_panel_settings, 'ຈັດການສິດທິບົດບາດ', kPageRolePermissions),
+                    if (canSee(kPageTableMgmt)) _item(context, Icons.table_bar, 'ຈັດການໂຕະ', kPageTableMgmt),
+                    if (canSee(kPageMenuMgmt)) _item(context, Icons.restaurant_menu, 'ຈັດການເມນູ', kPageMenuMgmt),
+                    if (canSee(kPageSettings)) _item(context, Icons.settings, 'ຕັ້ງຄ່າຮ້ານ', kPageSettings),
+                    if (canSee(kPageStock)) _item(context, Icons.inventory_2, 'ຄັງວັດຖຸດິບ', kPageStock, badgeCount: _lowStockCount),
+                    if (canSee(kPageStockReport)) _item(context, Icons.receipt_long, 'ລາຍງານວັດຖຸດິບ', kPageStockReport),
+                    if (canSee(kPageShoppingList)) _item(context, Icons.shopping_cart, 'ລາຍການອອກຕະຫຼາດ', kPageShoppingList),
+                    if (canSee(kPageReports)) _item(context, Icons.bar_chart, 'ລາຍງານ', kPageReports),
+                    if (canSee(kPageTableOps)) _item(context, Icons.swap_horiz, 'ຈັດການໂຕະລູກຄ້າ', kPageTableOps),
+                    if (canSee(kPageCustomers)) _item(context, Icons.people, 'ຈັດການລູກຄ້າ', kPageCustomers),
           ],
                 ],
               ),

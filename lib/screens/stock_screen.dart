@@ -620,7 +620,7 @@ class _StockScreenState extends State<StockScreen> {
                             crossAxisCount: isWeb ? 6 : 3,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 0.72,
+                            childAspectRatio: 0.68,
                           ),
                           itemCount: _currentItems.length,
                           itemBuilder: (_, i) {
@@ -696,56 +696,76 @@ class _StockScreenState extends State<StockScreen> {
                                     ),
                                   ),
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 30,
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF0F3460),
-                                                padding: EdgeInsets.zero,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        // Use a compact icon-only layout when the card is narrow
+                                        // (e.g. 6-column grid on smaller "web" widths) to avoid overflow.
+                                        final narrow = constraints.maxWidth < 150;
+                                        final iconSize = narrow ? 26.0 : 28.0;
+                                        return Row(
+                                          children: [
+                                            Expanded(
+                                              child: SizedBox(
+                                                height: 28,
+                                                child: ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFF0F3460),
+                                                    padding: EdgeInsets.zero,
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                  ),
+                                                  onPressed: () => _quickConsume(item),
+                                                  child: FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    child: Text('Use', style: TextStyle(color: Colors.white, fontSize: narrow ? 11 : 12)),
+                                                  ),
+                                                ),
                                               ),
-                                              onPressed: () => _quickConsume(item),
-                                              child: const Text('Use', style: TextStyle(color: Colors.white, fontSize: 12)),
                                             ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: 30,
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFFE94560),
-                                                padding: EdgeInsets.zero,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            const SizedBox(width: 3),
+                                            Expanded(
+                                              child: SizedBox(
+                                                height: 28,
+                                                child: ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: const Color(0xFFE94560),
+                                                    padding: EdgeInsets.zero,
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                  ),
+                                                  onPressed: () => _quickAddPurchase(item),
+                                                  child: FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    child: Text('+ Add', style: TextStyle(color: Colors.white, fontSize: narrow ? 11 : 12)),
+                                                  ),
+                                                ),
                                               ),
-                                              onPressed: () => _quickAddPurchase(item),
-                                              child: const Text('+ Add', style: TextStyle(color: Colors.white, fontSize: 12)),
                                             ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        SizedBox(
-                                          width: 30, height: 30,
-                                          child: IconButton(
-                                            padding: EdgeInsets.zero,
-                                            icon: const Icon(Icons.edit, color: Color(0xFF2196F3), size: 16),
-                                            onPressed: () => _showItemDialog(item: item),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: 30, height: 30,
-                                          child: IconButton(
-                                            padding: EdgeInsets.zero,
-                                            icon: const Icon(Icons.delete_outline, color: Color(0xFFE94560), size: 16),
-                                            onPressed: () => _confirmDelete(item),
-                                          ),
-                                        ),
-                                      ],
+                                            const SizedBox(width: 3),
+                                            SizedBox(
+                                              width: iconSize, height: iconSize,
+                                              child: IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                icon: Icon(Icons.edit, color: const Color(0xFF2196F3), size: narrow ? 14 : 16),
+                                                onPressed: () => _showItemDialog(item: item),
+                                              ),
+                                            ),
+                                            SizedBox(
+                                              width: iconSize, height: iconSize,
+                                              child: IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                icon: Icon(Icons.delete_outline, color: const Color(0xFFE94560), size: narrow ? 14 : 16),
+                                                onPressed: () => _confirmDelete(item),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ),
                                 ],

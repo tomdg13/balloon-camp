@@ -14,18 +14,12 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   bool _showHistory = false;
   final Set<int> _expandedGroups = {};
   List<dynamic> _stockItems = [];
+  List<dynamic> _categories = [];
   bool _loading = true;
-  String _selectedCategory = 'meat';
+  int? _selectedCategoryId;
   final Map<int, double> _cart = {};
   final Set<int> _buying = {};
   bool _submitting = false;
-
-  final _categories = const [
-    {'value': 'meat', 'label': 'ຊີ້ນ'},
-    {'value': 'vegetable', 'label': 'ຜັກ'},
-    {'value': 'seasoning', 'label': 'ເຄື່ອງປຸງ'},
-    {'value': 'other', 'label': 'ອື່ນໆ'},
-  ];
 
   @override
   void initState() {
@@ -40,12 +34,15 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         ApiService().getShoppingList(),
         ApiService().getStockItems(),
         ApiService().getShoppingListHistory(),
+        ApiService().getStockCategories(),
       ]);
       if (mounted) {
         setState(() {
           _pending = results[0];
           _stockItems = results[1];
           _history = results[2];
+          _categories = results[3];
+          _selectedCategoryId ??= _categories.isNotEmpty ? _categories.first['id'] as int : null;
           _loading = false;
         });
       }
@@ -131,7 +128,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   }
 
   List<dynamic> get _currentItems =>
-      _stockItems.where((it) => it['category'] == _selectedCategory).toList();
+      _stockItems.where((it) => it['category_id'] == _selectedCategoryId).toList();
 
   Future<void> _tapAdd(dynamic item) async {
     final itemId = item['id'] as int;
@@ -285,27 +282,49 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                       color: Color(0xFF0F3460),
                       border: Border(right: BorderSide(color: Colors.white10)),
                     ),
-                    child: ListView(
-                      children: _categories.map((cat) {
-                        final selected = cat['value'] == _selectedCategory;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
+                    child: Column(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(14, 12, 8, 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text('ໝວດໝູ່', style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
+                              ),
+                            ],
                           ),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(cat['label']!,
-                                style: TextStyle(
-                                    color: selected ? const Color(0xFFE94560) : Colors.white70,
-                                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                    fontSize: 13)),
-                            onTap: () => setState(() => _selectedCategory = cat['value']!),
+                        ),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: _categories.length,
+                            itemBuilder: (_, i) {
+                              final cat = _categories[i];
+                              final selected = cat['id'] == _selectedCategoryId;
+                              final count = _stockItems.where((it) => it['category_id'] == cat['id']).length;
+                              return Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: const EdgeInsets.only(left: 12, right: 4, top: 2, bottom: 2),
+                                  title: Text(cat['name_lao'] ?? '',
+                                      style: TextStyle(
+                                          color: selected ? const Color(0xFFE94560) : Colors.white70,
+                                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                                          fontSize: 13)),
+                                  subtitle: Text('$count ລາຍການ', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                  onTap: () => setState(() => _selectedCategoryId = cat['id'] as int),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      }).toList(),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(

@@ -16,6 +16,13 @@ class AppProvider extends ChangeNotifier {
   RestaurantTable? _selectedTable;
   RestaurantTable? get selectedTable => _selectedTable;
 
+  Map<String, Map<String, bool>> _permissions = {};
+  Map<String, Map<String, bool>> get permissions => _permissions;
+  Set<String> get allowedPages => _permissions.entries.where((e) => e.value["view"] == true).map((e) => e.key).toSet();
+  bool canView(String pageKey) => _permissions[pageKey]?["view"] ?? false;
+  bool canEdit(String pageKey) => _permissions[pageKey]?["edit"] ?? false;
+  bool canDelete(String pageKey) => _permissions[pageKey]?["delete"] ?? false;
+
   // ── Per-table carts  { tableId -> List<CartItem> } ────────
   final Map<int, List<CartItem>> _tableCarts = {};
 
@@ -37,6 +44,7 @@ class AppProvider extends ChangeNotifier {
     final staff = await _api.login(username, password);
     _staff = staff;
     await _storage.write(key: 'token', value: staff.token);
+    _permissions = await _api.getMyPermissions();
     notifyListeners();
   }
 
@@ -44,6 +52,7 @@ class AppProvider extends ChangeNotifier {
     _staff = null;
     _selectedTable = null;
     _tableCarts.clear();
+    _permissions = {};
     _api.clearToken();
     _storage.delete(key: 'token');
     notifyListeners();
