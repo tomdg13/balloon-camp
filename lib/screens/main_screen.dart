@@ -252,11 +252,10 @@ class _SideNavState extends State<_SideNav> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                           if (canSee(kPageTables)) _item(context, Icons.table_restaurant, 'ເລືອກໂຕະ', kPageTables),
-                  if (isAdmin || isKitchen)
-                    if (canSee(kPageKitchen)) _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
+                  if (canSee(kPageKitchen)) _item(context, Icons.kitchen, 'ຄົວ · ອໍເດີ', kPageKitchen),
                   if (canSee(kPageWaiterCalls)) _item(context, Icons.notifications_active, 'ອາຫານພ້ອມ', kPageWaiterCalls),
 
-                  if (isAdmin) ...[
+                  if (isAdmin || canSee(kPageStaff) || canSee(kPageTableMgmt) || canSee(kPageMenuMgmt) || canSee(kPageSettings) || canSee(kPageStock) || canSee(kPageStockReport) || canSee(kPageShoppingList) || canSee(kPageReports) || canSee(kPageTableOps) || canSee(kPageCustomers)) ...[
                     const Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 6),
               child: Text('ADMIN',

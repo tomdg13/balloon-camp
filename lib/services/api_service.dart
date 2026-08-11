@@ -442,8 +442,11 @@ class ApiService {
     });
   }
 
-  Future<void> markShoppingItemBought(int id) async {
-    await _dio.patch('/api/shopping-list/$id/buy');
+  Future<void> markShoppingItemBought(int id, {double? quantityBought, double? unitPrice}) async {
+    await _dio.patch('/api/shopping-list/$id/buy', data: {
+      if (quantityBought != null) 'quantity_bought': quantityBought,
+      if (unitPrice != null) 'unit_price': unitPrice,
+    });
   }
 
   Future<void> deleteShoppingItem(int id) async {

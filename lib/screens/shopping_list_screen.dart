@@ -188,24 +188,92 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       if (mounted) setState(() => _submitting = false);
     }
   }
-
   Future<void> _markBought(dynamic entry) async {
     final id = entry['id'] as int;
+    final needed = double.tryParse(entry['quantity_needed'].toString()) ?? 0;
+
+    final qtyCtrl = TextEditingController(text: needed.toStringAsFixed(2));
+    final priceCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: Text('ຊື້ ${entry['name_lao']}', style: const TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('ຕ້ອງການ: $needed ${entry['unit']}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: qtyCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'ຈຳນວນທີ່ຊື້ໄດ້',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE94560))),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: priceCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'ລາຄາຕໍ່ໜ່ວຍ (ກີບ)',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFE94560))),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('ຢືນຢັນ', style: TextStyle(color: Color(0xFFE94560))),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) return;
+
+    final actualQty = double.tryParse(qtyCtrl.text);
+    final unitPrice = double.tryParse(priceCtrl.text);
+
+    if (actualQty == null || actualQty < 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ກະລຸນາໃສ່ຈຳນວນທີ່ຖືກຕ້ອງ'), backgroundColor: Color(0xFFE94560)),
+        );
+      }
+      return;
+    }
+
     setState(() => _buying.add(id));
     try {
-      await ApiService().markShoppingItemBought(id);
+      await ApiService().markShoppingItemBought(id, quantityBought: actualQty, unitPrice: unitPrice);
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Bought ${entry['quantity_needed']} ${entry['unit']} of ${entry['name_lao']}'),
-                backgroundColor: const Color(0xFF4CAF50)));
+          SnackBar(content: Text('ຊື້ $actualQty ${entry['unit']} ${entry['name_lao']} ສຳເລັດ')),
+        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _buying.remove(id));
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _buying.remove(id));
     }
   }
 
