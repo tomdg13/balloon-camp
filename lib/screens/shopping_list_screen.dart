@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/api_service.dart';
 
@@ -220,6 +222,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             TextField(
               controller: priceCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, _ThousandsFormatter()],
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'ລາຄາຕໍ່ໜ່ວຍ (ກີບ)',
@@ -246,7 +249,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     if (result != true) return;
 
     final actualQty = double.tryParse(qtyCtrl.text);
-    final unitPrice = double.tryParse(priceCtrl.text);
+    final unitPrice = double.tryParse(priceCtrl.text.replaceAll(',', ''));
 
     if (actualQty == null || actualQty < 0) {
       if (mounted) {
@@ -737,6 +740,21 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               label: Text('ເພີ່ມ ${_cart.length} ລາຍການ', style: const TextStyle(color: Colors.white)),
             )
           : null,
+    );
+  }
+}
+
+class _ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+    final digits = newValue.text.replaceAll(',', '');
+    if (digits.isEmpty || double.tryParse(digits) == null) return oldValue;
+    final formatted = NumberFormat.decimalPattern().format(int.parse(digits));
+    return newValue.copyWith(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
