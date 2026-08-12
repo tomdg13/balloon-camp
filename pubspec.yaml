@@ -21,6 +21,7 @@ dependencies:
   fl_chart: ^1.2.0
   printing: ^5.14.3
   pdf: ^3.12.0
+  sunmi_printer_plus: ^4.1.1
 
 dev_dependencies:
   flutter_test:

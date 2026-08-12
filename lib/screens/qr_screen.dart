@@ -4,11 +4,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../models/models.dart';
 import '../services/api_config.dart';
+import '../services/print/print_service.dart';
 
 class QrScreen extends StatefulWidget {
   final RestaurantTable table;
@@ -40,50 +38,15 @@ class _QrScreenState extends State<QrScreen> {
     setState(() => _isPrinting = true);
     try {
       final qrBytes = await _captureQrImage();
-      final qrImage = pw.MemoryImage(qrBytes);
 
-      final doc = pw.Document();
-      doc.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a6,
-          build: (context) => pw.Center(
-            child: pw.Column(
-              mainAxisAlignment: pw.MainAxisAlignment.center,
-              children: [
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(16),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(width: 1),
-                    borderRadius: pw.BorderRadius.circular(12),
-                  ),
-                  child: pw.Column(
-                    children: [
-                      pw.Image(qrImage, width: 220, height: 220),
-                      pw.SizedBox(height: 12),
-                      pw.Text(
-                        'Table ${table.tableNumber}',
-                        style: pw.TextStyle(
-                          fontSize: 20,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.Text(
-                        '${table.capacity} seats',
-                        style: const pw.TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      await Printing.layoutPdf(
-        onLayout: (format) async => doc.save(),
-        name: 'QR_Table_${table.tableNumber}',
-      );
+      await printJob(PrintJob(
+        title: 'Table ${table.tableNumber}',
+        qrOrLogoImageBytes: qrBytes,
+        lines: [
+          PrintLine('Seats', '${table.capacity}'),
+          PrintLine('Token', table.qrToken ?? '-'),
+        ],
+      ));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
