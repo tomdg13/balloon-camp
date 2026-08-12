@@ -19,6 +19,8 @@ dependencies:
   intl: ^0.20.3
   qr_flutter: ^4.1.0
   fl_chart: ^1.2.0
+  printing: ^5.14.3
+  pdf: ^3.12.0
 
 dev_dependencies:
   flutter_test:
