@@ -24,7 +24,7 @@ class _QrScreenState extends State<QrScreen> {
   RestaurantTable get table => widget.table;
 
   String get _qrData =>
-      'https://balloon-camp-api.sabaiapp.com/customer/?table=${table.tableNumber}&token=${table.qrToken}';
+      'https://balloon-camp-api.sabaiapp.com/customer/?table=${table.tableNumber}';
 
   Future<Uint8List> _captureQrImage() async {
     final boundary =
@@ -44,7 +44,6 @@ class _QrScreenState extends State<QrScreen> {
         qrOrLogoImageBytes: qrBytes,
         lines: [
           PrintLine('Seats', '${table.capacity}'),
-          PrintLine('Token', table.qrToken ?? '-'),
         ],
       ));
     } catch (e) {
