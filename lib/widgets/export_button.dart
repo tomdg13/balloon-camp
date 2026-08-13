@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
-import 'dart:html' as html show AnchorElement, Blob, Url;
+import '../utils/web_downloader.dart';
 
 class ExportButton extends StatelessWidget {
   final Dio dio;
   final String from;
   final String to;
-
   const ExportButton({
     super.key,
     required this.dio,
@@ -22,17 +21,10 @@ class ExportButton extends StatelessWidget {
         queryParameters: {'from': from, 'to': to},
         options: Options(responseType: ResponseType.bytes),
       );
-
       final bytes = response.data as List<int>;
       final filename = 'report_${from}_to_$to.csv';
-
       if (kIsWeb) {
-        final blob = html.Blob([bytes], 'text/csv');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)
-          ..setAttribute('download', filename)
-          ..click();
-        html.Url.revokeObjectUrl(url);
+        downloadCsv(bytes, filename);
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
