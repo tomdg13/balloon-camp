@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import '../utils/print_helper.dart';
+import '../services/print/print_service.dart';
 import 'package:dio/dio.dart';
 
 
@@ -127,6 +128,7 @@ class _BillScreenState extends State<BillScreen> {
   }
 
   void _print() {
+    debugPrint('🖨️ [bill_print] _print() called, kIsWeb=$kIsWeb');
     final itemRows = StringBuffer();
     for (final item in _items) {
       final lineTotal = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
@@ -200,10 +202,42 @@ $qrHtml
     if (kIsWeb) {
       openHtmlInNewTab(html);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ການພິມໃຊ້ໄດ້ສະເພາະ Web'),
-            backgroundColor: Color(0xFF2196F3)),
-      );
+      _printBillOnSunmi();
+    }
+  }
+
+  Future<void> _printBillOnSunmi() async {
+    debugPrint('🖨️ [bill_print] _printBillOnSunmi() started, items=${_items.length}');
+    try {
+      final lines = <PrintLine>[];
+      for (final item in _items) {
+        final qty = item['quantity']?.toString() ?? '';
+        final name = item['name_lao']?.toString() ?? '';
+        final lineTotal = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
+        lines.add(PrintLine('${qty}x $name', _fmtNum(lineTotal)));
+      }
+      lines.add(PrintLine('ລວມທັງໝົດ', '${_fmtNum(_bill!.total)} ກີບ', bold: true));
+
+      debugPrint('🖨️ [bill_print] calling printJob() with ${lines.length} lines');
+      await printJob(PrintJob(
+        title: 'ໂຕະ ${_bill!.tableNumber}',
+        lines: lines,
+      ));
+      debugPrint('🖨️ [bill_print] printJob() completed successfully');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ພິມບິນສຳເລັດ')),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('🖨️ [bill_print] ERROR: $e');
+      debugPrint('🖨️ [bill_print] STACK: $st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ພິມບໍ່ສຳເລັດ: $e')),
+        );
+      }
     }
   }
 

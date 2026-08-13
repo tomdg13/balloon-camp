@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/print_helper.dart';
+import '../services/print/print_service.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -756,10 +757,68 @@ $qrHtml
     if (kIsWeb) {
       openHtmlInNewTab(html);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ການພິມໃຊ້ໄດ້ສະເພາະ Web'),
-            backgroundColor: Color(0xFF2196F3)),
+      _printOnSunmi();
+    }
+  }
+
+  Future<List<int>?> _downloadImageBytes(String? url) async {
+    if (url == null) return null;
+    try {
+      final res = await Dio().get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes),
       );
+      return res.data;
+    } catch (e) {
+      debugPrint('🖨️ [payment_print] failed to download image $url: $e');
+      return null;
+    }
+  }
+
+  Future<void> _printOnSunmi() async {
+    debugPrint('🖨️ [payment_print] _printOnSunmi() started, orders=${_orders.length}');
+    try {
+      final lines = <PrintLine>[];
+      for (final o in _orders) {
+        final items = o['items'] as List? ?? [];
+        for (final item in items) {
+          final qty = item['quantity']?.toString() ?? '';
+          final name = item['name_lao']?.toString() ?? '';
+          final lineTotal = double.tryParse(item['line_total']?.toString() ?? '0') ?? 0;
+          lines.add(PrintLine('${qty}x $name', _fmtNum(lineTotal)));
+        }
+      }
+      lines.add(PrintLine('ລວມທັງໝົດ', '${_fmtNum(_totalAmt)} ກີບ', bold: true));
+
+      final logoBytes = await _downloadImageBytes(_logoUrl);
+      final qrBytes = await _downloadImageBytes(_bankQrUrl);
+
+      debugPrint('🖨️ [payment_print] calling printJob() with ${lines.length} lines, logo=${logoBytes != null}, qr=${qrBytes != null}');
+      await printJob(PrintJob(
+        title: 'ໂຕະ ${widget.tableNumber}',
+        logoImageBytes: logoBytes,
+        qrImageBytes: qrBytes,
+        lines: lines,
+        footerLines: [
+          if (_bankQrUrl != null) 'ສະແກນເພື່ອຊຳລະ · PromptPay / BCEL / LDB',
+          'ຂອບໃຈທີ່ໃຊ້ບໍລິການ',
+        ],
+      ));
+      debugPrint('🖨️ [payment_print] printJob() completed successfully');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ພິມບິນສຳເລັດ')),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('🖨️ [payment_print] ERROR: $e');
+      debugPrint('🖨️ [payment_print] STACK: $st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ພິມບໍ່ສຳເລັດ: $e')),
+        );
+      }
     }
   }
 }

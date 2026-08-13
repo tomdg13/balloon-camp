@@ -8,13 +8,19 @@ export 'print_service_stub.dart'
 /// Shared model so callers don't care which backend is used.
 class PrintJob {
   final String title;      // e.g. "Table 4" or "Receipt #1029"
-  final List<int> qrOrLogoImageBytes; // PNG bytes, optional
+  final List<int> qrOrLogoImageBytes; // PNG bytes, optional (legacy: printed at top)
+  final List<int>? logoImageBytes;    // shop logo, printed at the very top
+  final List<int>? qrImageBytes;      // payment QR, printed after the item lines
   final List<PrintLine> lines;
+  final List<String> footerLines;     // plain centered text after the QR (e.g. payment method, thank-you note)
 
   const PrintJob({
     required this.title,
     this.qrOrLogoImageBytes = const [],
+    this.logoImageBytes,
+    this.qrImageBytes,
     this.lines = const [],
+    this.footerLines = const [],
   });
 }
 

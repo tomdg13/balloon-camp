@@ -29,7 +29,7 @@ class _QrScreenState extends State<QrScreen> {
   Future<Uint8List> _captureQrImage() async {
     final boundary =
         _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-    final image = await boundary.toImage(pixelRatio: 3.0);
+    final image = await boundary.toImage(pixelRatio: 1.2);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     return byteData!.buffer.asUint8List();
   }
@@ -85,8 +85,9 @@ class _QrScreenState extends State<QrScreen> {
         ],
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // QR Card
             RepaintBoundary(
@@ -187,6 +188,7 @@ class _QrScreenState extends State<QrScreen> {
             ),
           ],
         ),
+          ),
       ),
     );
   }

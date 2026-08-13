@@ -308,10 +308,14 @@ class _MenuScreenState extends State<MenuScreen> {
                             padding: const EdgeInsets.all(12),
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: isWeb ? 8 : 4,
+                              crossAxisCount: isWeb
+                                  ? 8
+                                  : (MediaQuery.of(context).size.width < 400 ? 3 : 4),
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
-                              childAspectRatio: isWeb ? 0.75 : 0.62,
+                              childAspectRatio: isWeb
+                                  ? 0.75
+                                  : (MediaQuery.of(context).size.width < 400 ? 0.40 : 0.62),
                             ),
                             itemCount: _currentItems.length,
                             itemBuilder: (_, i) {
@@ -430,8 +434,10 @@ class _MenuCard extends StatelessWidget {
               ]),
             ),
           ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -446,11 +452,11 @@ class _MenuCard extends StatelessWidget {
                         style: const TextStyle(
                             color: Color(0xFFE94560), fontSize: 10,
                             fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   qty == 0
                       ? SizedBox(
                           width: double.infinity,
-                          height: 28,
+                          height: 22,
                           child: ElevatedButton(
                             onPressed: () => provider.addToCart(item),
                             style: ElevatedButton.styleFrom(
@@ -479,6 +485,7 @@ class _MenuCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
         ],
       ),
     );
