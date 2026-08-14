@@ -298,7 +298,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF16213E),
         title: const Text('ເຄື່ອງໝົດແລ້ວ?', style: TextStyle(color: Colors.white)),
-        content: Text('ຕັ້ງຄ່າ "${entry['name_lao']}" ເປັນໝົດແລ້ວ (ຈຳນວນ = 0)?', style: const TextStyle(color: Colors.white70)),
+        content: Text('ຕັ້ງຄ່າ "${entry['name_lao']}" ເປັນໝົດແລ້ວ (ຈຳນວນ= 0)?', style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ຍົກເລີກ', style: TextStyle(color: Colors.white54))),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('ຢືນຢັນ', style: TextStyle(color: Color(0xFFE94560)))),
@@ -320,6 +320,52 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFE94560)));
       }
     }
+  }
+
+  void _openCartPanelSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => StatefulBuilder(
+          builder: (context, setModalState) {
+            // Rebuild the outer state too so cart/history edits reflect
+            // immediately behind the sheet as well.
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF16213E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: _cartPanelContent(
+                      onStateChange: () {
+                        setModalState(() {});
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -345,401 +391,512 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             const Expanded(child: Center(child: CircularProgressIndicator(color: Color(0xFFE94560))))
           else
             Expanded(
-              child: Row(
-                children: [
-                  Container(
-                    width: 150,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF0F3460),
-                      border: Border(right: BorderSide(color: Colors.white10)),
-                    ),
-                    child: Column(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Below ~900px the fixed 150px category rail plus a 420px
+                  // cart/history panel don't fit alongside the item grid, so
+                  // we switch to a stacked mobile layout: category chips on
+                  // top, grid in the middle, and the cart/history panel
+                  // moves into a bottom sheet opened via a floating button.
+                  final isNarrow = constraints.maxWidth < 900;
+
+                  if (isNarrow) {
+                    return Column(
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(14, 12, 8, 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text('ໝວດໝູ່', style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: _categories.length,
-                            itemBuilder: (_, i) {
-                              final cat = _categories[i];
-                              final selected = cat['id'] == _selectedCategoryId;
-                              final count = _stockItems.where((it) => it['category_id'] == cat['id']).length;
-                              return Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
-                                ),
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: const EdgeInsets.only(left: 12, right: 4, top: 2, bottom: 2),
-                                  title: Text(cat['name_lao'] ?? '',
-                                      style: TextStyle(
-                                          color: selected ? const Color(0xFFE94560) : Colors.white70,
-                                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                          fontSize: 13)),
-                                  subtitle: Text('$count ລາຍການ', style: const TextStyle(color: Colors.white38, fontSize: 10)),
-                                  onTap: () => setState(() => _selectedCategoryId = cat['id'] as int),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
+                        _categoryChipsRow(),
+                        Expanded(child: _itemGrid(isWeb: isWeb, crossAxisCount: 3)),
                       ],
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: _currentItems.isEmpty
-                        ? const Center(child: Text('No ingredients in this category', style: TextStyle(color: Colors.white54)))
-                        : GridView.builder(
-                            padding: const EdgeInsets.all(12),
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: isWeb ? 6 : 3,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                              childAspectRatio: 0.75,
-                            ),
-                            itemCount: _currentItems.length,
-                            itemBuilder: (_, i) {
-                              final item = _currentItems[i];
-                              final itemId = item['id'] as int;
-                              final inCart = _cart[itemId];
-                              final days = _daysUntilExpiry(item);
-                              return GestureDetector(
-                                onTap: () => _tapAdd(item),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF16213E),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                        color: inCart != null ? const Color(0xFFE94560) : Colors.white10,
-                                        width: inCart != null ? 2 : 1),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        flex: 3,
-                                        child: ClipRRect(
-                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
-                                          child: Stack(
-                                            fit: StackFit.expand,
-                                            children: [
-                                              Container(
-                                                color: const Color(0xFF0F3460),
-                                                child: item['image_url'] != null
-                                                    ? CachedNetworkImage(imageUrl: item['image_url'], fit: BoxFit.cover)
-                                                    : const Center(child: Icon(Icons.restaurant, color: Colors.white24, size: 28)),
-                                              ),
-                                              if (inCart != null)
-                                                Positioned(
-                                                  top: 6, right: 6,
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                    decoration: BoxDecoration(color: const Color(0xFFE94560), borderRadius: BorderRadius.circular(10)),
-                                                    child: Text('$inCart ${item['unit']}',
-                                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text('${item['name_lao']}',
-                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                                            if (days != null)
-                                              Text(
-                                                days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
-                                                style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                  Container(
-                    width: 420,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF16213E),
-                      border: Border(left: BorderSide(color: Colors.white10)),
-                    ),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => setState(() => _showHistory = false),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: !_showHistory ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text('ລໍຖ້າຊື້', textAlign: TextAlign.center,
-                                        style: TextStyle(color: !_showHistory ? const Color(0xFFE94560) : Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => setState(() => _showHistory = true),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: _showHistory ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text('ປະຫວັດ', textAlign: TextAlign.center,
-                                        style: TextStyle(color: _showHistory ? const Color(0xFFE94560) : Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: _showHistory
-                              ? ListView.builder(
-                                  padding: const EdgeInsets.all(8),
-                                  itemCount: _groupedHistory.length,
-                                  itemBuilder: (_, i) {
-                                    final group = _groupedHistory[i];
-                                    final stockId = group['stock_item_id'] as int;
-                                    final expanded = _expandedGroups.contains(stockId);
-                                    final days = _daysUntilExpiry(group);
-                                    final entries = group['entries'] as List;
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F3460),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          InkWell(
-                                            onTap: () => setState(() {
-                                              if (expanded) {
-                                                _expandedGroups.remove(stockId);
-                                              } else {
-                                                _expandedGroups.add(stockId);
-                                              }
-                                            }),
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(10),
-                                              child: Row(
-                                                children: [
-                                                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: Colors.white54, size: 18),
-                                                  const SizedBox(width: 6),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text('${group['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                                        Text(
-                                                            '${(group['available_quantity'] as double).toStringAsFixed(2)} ${group['unit']} ຍັງໃຊ້ໄດ້ · ${group['purchase_count']} ຄັ້ງ',
-                                                            style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                                                        if (days != null)
-                                                          Text(
-                                                            days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
-                                                            style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  SizedBox(
-                                                    height: 28,
-                                                    child: ElevatedButton(
-                                                      onPressed: () => _markDepleted(group),
-                                                      style: ElevatedButton.styleFrom(
-                                                        backgroundColor: const Color(0xFFE94560),
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                      ),
-                                                      child: const Text('ໝົດແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 11)),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                          if (expanded)
-                                            Padding(
-                                              padding: const EdgeInsets.fromLTRB(34, 0, 10, 8),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: entries.map<Widget>((e) {
-                                                  final t = DateTime.tryParse(e['bought_at']?.toString() ?? '');
-                                                  final dateLabel = t == null ? '' : '${t.day.toString().padLeft(2, "0")}/${t.month.toString().padLeft(2, "0")}/${t.year}';
-                                                  final status = _entryStatus(e);
-                                                  String statusLabel;
-                                                  Color statusColor;
-                                                  switch (status) {
-                                                    case 'expired':
-                                                      statusLabel = 'ໝົດອາຍຸແລ້ວ';
-                                                      statusColor = const Color(0xFFE94560);
-                                                      break;
-                                                    case 'used_up':
-                                                      statusLabel = 'ໃຊ້ໝົດແລ້ວ';
-                                                      statusColor = Colors.white38;
-                                                      break;
-                                                    case 'no_expiry':
-                                                      statusLabel = 'ບໍ່ມີວັນໝົດອາຍຸ';
-                                                      statusColor = const Color(0xFFFF9800);
-                                                      break;
-                                                    default:
-                                                      statusLabel = 'ໃຊ້ໄດ້';
-                                                      statusColor = const Color(0xFF4CAF50);
-                                                  }
-                                                  final remaining = _entryRemaining(e);
-                                                  return Padding(
-                                                    padding: const EdgeInsets.symmetric(vertical: 4),
-                                                    child: Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Column(
-                                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                                            children: [
-                                                              Text('${e['quantity_needed']} ${e['unit']} · $dateLabel',
-                                                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                                              Row(
-                                                                children: [
-                                                                  Container(
-                                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                                                    decoration: BoxDecoration(
-                                                                      color: statusColor.withValues(alpha: 0.15),
-                                                                      borderRadius: BorderRadius.circular(6),
-                                                                    ),
-                                                                    child: Text(statusLabel,
-                                                                        style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                                                                  ),
-                                                                  if (status != 'used_up' && status != 'expired') ...[
-                                                                    const SizedBox(width: 6),
-                                                                    Text('ເຫຼືອ ${remaining.toStringAsFixed(2)}',
-                                                                        style: const TextStyle(color: Colors.white38, fontSize: 10)),
-                                                                  ],
-                                                                ],
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        IconButton(
-                                                          padding: EdgeInsets.zero,
-                                                          constraints: const BoxConstraints(),
-                                                          icon: const Icon(Icons.close, color: Colors.white38, size: 16),
-                                                          onPressed: () => _removeItem(e),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                )
-                              : ListView.builder(
-                                  padding: const EdgeInsets.all(8),
-                                  itemCount: _pending.length,
-                                  itemBuilder: (_, i) {
-                                    final entry = _pending[i];
-                                    final id = entry['id'] as int;
-                                    final isBuying = _buying.contains(id);
-                                    final days = _daysUntilExpiry(entry);
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F3460),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text('${entry['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                                Text('${entry['quantity_needed']} ${entry['unit']}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                                                if (days != null)
-                                                  Text(
-                                                    days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
-                                                    style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                          SizedBox(
-                                            height: 30,
-                                            child: ElevatedButton(
-                                              onPressed: isBuying ? null : () => _markBought(entry),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF4CAF50),
-                                                padding: const EdgeInsets.symmetric(horizontal: 10),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                              ),
-                                              child: isBuying
-                                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                                  : const Text('ຊື້ແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 12)),
-                                            ),
-                                          ),
-                                          IconButton(
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(),
-                                            icon: const Icon(Icons.close, color: Colors.white38, size: 16),
-                                            onPressed: () => _removeItem(entry),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      _categorySidebar(),
+                      Expanded(flex: 2, child: _itemGrid(isWeb: isWeb, crossAxisCount: 6)),
+                      _cartPanel(),
+                    ],
+                  );
+                },
               ),
             ),
         ],
       ),
-      floatingActionButton: _cart.isNotEmpty
-          ? FloatingActionButton.extended(
-              backgroundColor: const Color(0xFFE94560),
-              onPressed: _submitting ? null : _submitCart,
-              icon: _submitting
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.shopping_cart, color: Colors.white),
-              label: Text('ເພີ່ມ ${_cart.length} ລາຍການ', style: const TextStyle(color: Colors.white)),
-            )
-          : null,
+      floatingActionButton: Builder(builder: (context) {
+        final isNarrow = MediaQuery.of(context).size.width < 900;
+        if (_cart.isNotEmpty) {
+          return FloatingActionButton.extended(
+            backgroundColor: const Color(0xFFE94560),
+            onPressed: _submitting ? null : _submitCart,
+            icon: _submitting
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.shopping_cart, color: Colors.white),
+            label: Text('ເພີ່ມ ${_cart.length} ລາຍການ', style: const TextStyle(color: Colors.white)),
+          );
+        }
+        // On narrow screens (no inline cart/history panel), give access to
+        // it via a floating button instead.
+        if (isNarrow && !_loading) {
+          return FloatingActionButton(
+            backgroundColor: const Color(0xFF0F3460),
+            onPressed: _openCartPanelSheet,
+            child: const Icon(Icons.receipt_long, color: Colors.white),
+          );
+        }
+        return const SizedBox.shrink();
+      }),
+    );
+  }
+
+  // ── Category rail (wide screens) ───────────────────────────────
+  Widget _categorySidebar() {
+    return Container(
+      width: 150,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F3460),
+        border: Border(right: BorderSide(color: Colors.white10)),
+      ),
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(14, 12, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('ໝວດໝູ່', style: TextStyle(color: Colors.white38, fontSize: 11, letterSpacing: 1.5)),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _categories.length,
+              itemBuilder: (_, i) {
+                final cat = _categories[i];
+                final selected = cat['id'] == _selectedCategoryId;
+                final count = _stockItems.where((it) => it['category_id'] == cat['id']).length;
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: selected ? Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.4)) : null,
+                  ),
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.only(left: 12, right: 4, top: 2, bottom: 2),
+                    title: Text(cat['name_lao'] ?? '',
+                        style: TextStyle(
+                            color: selected ? const Color(0xFFE94560) : Colors.white70,
+                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 13)),
+                    subtitle: Text('$count ລາຍການ', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                    onTap: () => setState(() => _selectedCategoryId = cat['id'] as int),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Category chips (narrow/mobile screens) ─────────────────────
+  Widget _categoryChipsRow() {
+    return Container(
+      height: 56,
+      color: const Color(0xFF0F3460),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        itemCount: _categories.length,
+        itemBuilder: (_, i) {
+          final cat = _categories[i];
+          final selected = cat['id'] == _selectedCategoryId;
+          final count = _stockItems.where((it) => it['category_id'] == cat['id']).length;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedCategoryId = cat['id'] as int),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: selected ? const Color(0xFFE94560) : Colors.white24),
+                ),
+                child: Center(
+                  child: Text('${cat['name_lao'] ?? ''} ($count)',
+                      style: TextStyle(
+                          color: selected ? const Color(0xFFE94560) : Colors.white70,
+                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 12)),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Item grid (shared between layouts) ──────────────────────────
+  Widget _itemGrid({required bool isWeb, required int crossAxisCount}) {
+    return _currentItems.isEmpty
+        ? const Center(child: Text('No ingredients in this category', style: TextStyle(color: Colors.white54)))
+        : GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.75,
+            ),
+            itemCount: _currentItems.length,
+            itemBuilder: (_, i) {
+              final item = _currentItems[i];
+              final itemId = item['id'] as int;
+              final inCart = _cart[itemId];
+              final days = _daysUntilExpiry(item);
+              return GestureDetector(
+                onTap: () => _tapAdd(item),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16213E),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: inCart != null ? const Color(0xFFE94560) : Colors.white10,
+                        width: inCart != null ? 2 : 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Container(
+                                color: const Color(0xFF0F3460),
+                                child: item['image_url'] != null
+                                    ? CachedNetworkImage(imageUrl: item['image_url'], fit: BoxFit.cover)
+                                    : const Center(child: Icon(Icons.restaurant, color: Colors.white24, size: 28)),
+                              ),
+                              if (inCart != null)
+                                Positioned(
+                                  top: 6, right: 6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(color: const Color(0xFFE94560), borderRadius: BorderRadius.circular(10)),
+                                    child: Text('$inCart ${item['unit']}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${item['name_lao']}',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if (days != null)
+                              Text(
+                                days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
+                                style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+  }
+
+  // ── Cart/history panel (wide screens: fixed side panel) ─────────
+  Widget _cartPanel() {
+    return Container(
+      width: 420,
+      decoration: const BoxDecoration(
+        color: Color(0xFF16213E),
+        border: Border(left: BorderSide(color: Colors.white10)),
+      ),
+      child: _cartPanelContent(onStateChange: () => setState(() {})),
+    );
+  }
+
+  // ── Cart/history panel content (shared: side panel or bottom sheet) ──
+  Widget _cartPanelContent({required VoidCallback onStateChange}) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    _showHistory = false;
+                    onStateChange();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: !_showHistory ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('ລໍຖ້າຊື້', textAlign: TextAlign.center,
+                        style: TextStyle(color: !_showHistory ? const Color(0xFFE94560) : Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    _showHistory = true;
+                    onStateChange();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _showHistory ? const Color(0xFFE94560).withValues(alpha: 0.15) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('ປະຫວັດ', textAlign: TextAlign.center,
+                        style: TextStyle(color: _showHistory ? const Color(0xFFE94560) : Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _showHistory
+              ? ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _groupedHistory.length,
+                  itemBuilder: (_, i) {
+                    final group = _groupedHistory[i];
+                    final stockId = group['stock_item_id'] as int;
+                    final expanded = _expandedGroups.contains(stockId);
+                    final days = _daysUntilExpiry(group);
+                    final entries = group['entries'] as List;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F3460),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          InkWell(
+                            onTap: () {
+                              if (expanded) {
+                                _expandedGroups.remove(stockId);
+                              } else {
+                                _expandedGroups.add(stockId);
+                              }
+                              onStateChange();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Row(
+                                children: [
+                                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: Colors.white54, size: 18),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${group['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                        Text(
+                                            '${(group['available_quantity'] as double).toStringAsFixed(2)} ${group['unit']} ຍັງໃຊ້ໄດ້ · ${group['purchase_count']} ຄັ້ງ',
+                                            style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                        if (days != null)
+                                          Text(
+                                            days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
+                                            style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    height: 28,
+                                    child: ElevatedButton(
+                                      onPressed: () async {
+                                        await _markDepleted(group);
+                                        onStateChange();
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFE94560),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      child: const Text('ໝົດແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (expanded)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(34, 0, 10, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: entries.map<Widget>((e) {
+                                  final t = DateTime.tryParse(e['bought_at']?.toString() ?? '');
+                                  final dateLabel = t == null ? '' : '${t.day.toString().padLeft(2, "0")}/${t.month.toString().padLeft(2, "0")}/${t.year}';
+                                  final status = _entryStatus(e);
+                                  String statusLabel;
+                                  Color statusColor;
+                                  switch (status) {
+                                    case 'expired':
+                                      statusLabel = 'ໝົດອາຍຸແລ້ວ';
+                                      statusColor = const Color(0xFFE94560);
+                                      break;
+                                    case 'used_up':
+                                      statusLabel = 'ໃຊ້ໝົດແລ້ວ';
+                                      statusColor = Colors.white38;
+                                      break;
+                                    case 'no_expiry':
+                                      statusLabel = 'ບໍ່ມີວັນໝົດອາຍຸ';
+                                      statusColor = const Color(0xFFFF9800);
+                                      break;
+                                    default:
+                                      statusLabel = 'ໃຊ້ໄດ້';
+                                      statusColor = const Color(0xFF4CAF50);
+                                  }
+                                  final remaining = _entryRemaining(e);
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('${e['quantity_needed']} ${e['unit']} · $dateLabel',
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: statusColor.withValues(alpha: 0.15),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(statusLabel,
+                                                        style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                  ),
+                                                  if (status != 'used_up' && status != 'expired') ...[
+                                                    const SizedBox(width: 6),
+                                                    Text('ເຫຼືອ ${remaining.toStringAsFixed(2)}',
+                                                        style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                                  ],
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          icon: const Icon(Icons.close, color: Colors.white38, size: 16),
+                                          onPressed: () async {
+                                            await _removeItem(e);
+                                            onStateChange();
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _pending.length,
+                  itemBuilder: (_, i) {
+                    final entry = _pending[i];
+                    final id = entry['id'] as int;
+                    final isBuying = _buying.contains(id);
+                    final days = _daysUntilExpiry(entry);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F3460),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${entry['name_lao']}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                Text('${entry['quantity_needed']} ${entry['unit']}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                if (days != null)
+                                  Text(
+                                    days < 0 ? 'ໝົດອາຍຸແລ້ວ' : 'ອີກ $days ມື້',
+                                    style: TextStyle(color: (days <= 1) ? const Color(0xFFE94560) : Colors.white38, fontSize: 10),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(
+                            height: 30,
+                            child: ElevatedButton(
+                              onPressed: isBuying
+                                  ? null
+                                  : () async {
+                                      await _markBought(entry);
+                                      onStateChange();
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4CAF50),
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: isBuying
+                                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Text('ຊື້ແລ້ວ', style: TextStyle(color: Colors.white, fontSize: 12)),
+                            ),
+                          ),
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.close, color: Colors.white38, size: 16),
+                            onPressed: () async {
+                              await _removeItem(entry);
+                              onStateChange();
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
